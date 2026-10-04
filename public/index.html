@@ -37,33 +37,31 @@
   </div>
 
   <div id="app" class="hidden">
-    <!-- 仪器条 -->
-    <header id="topbar">
-      <div class="brand">
-        <span class="logo"></span>
-        <span class="brand-name">SciTag</span>
-        <span class="brand-sub">RESEARCH GROUP CONSOLE</span>
-      </div>
-      <div id="liveStats" class="live-stats" title="平台实时指标"></div>
-      <div class="topbar-actions">
-        <button id="btnNewMission" class="btn primary">＋ 新课题</button>
-        <button id="btnPanel" class="btn">任务板</button>
-      </div>
-    </header>
-
+    <!-- Claude 式布局：无顶栏，左侧栏 + 主区（+可开任务板） -->
     <div id="workspace">
       <aside id="sidebar">
+        <div class="sb-top">
+          <div class="brand">
+            <span class="logo"></span>
+            <span class="brand-name">SciTag</span>
+          </div>
+          <button id="btnNewMission" class="btn primary btn-block">开始新课题</button>
+        </div>
         <div class="side-scroll">
           <section class="side-sec">
-            <div class="side-sec-head"><span>Index · 会话</span></div>
+            <div class="side-sec-head"><span>会话</span></div>
             <ul id="channelList" class="side-list"></ul>
           </section>
           <section class="side-sec">
-            <div class="side-sec-head"><span>Manifest · 成员</span><button id="btnAddAgent" class="mini" title="接入新 agent">＋</button></div>
+            <div class="side-sec-head"><span>成员</span><button id="btnAddAgent" class="mini" title="接入新 agent">＋</button></div>
             <ul id="rosterList" class="manifest"></ul>
           </section>
         </div>
-        <div class="side-foot" id="domainsInfo"></div>
+        <div class="side-foot">
+          <div id="liveStats" class="side-stats" title="平台实时指标"></div>
+          <div id="domainsInfo" class="side-domains"></div>
+          <div class="me-card" id="meCard"></div>
+        </div>
       </aside>
 
       <main id="main">
@@ -72,13 +70,16 @@
             <div id="chatTitle">—</div>
             <div id="chatSub"></div>
           </div>
-          <div id="chatMeta" class="chat-meta"></div>
+          <div class="chat-head-actions">
+            <span id="chatMeta" class="chat-meta"></span>
+            <button id="btnPanel" class="btn ghost">任务板</button>
+          </div>
         </header>
         <div id="msgList"></div>
         <div id="composer">
           <div id="popup" class="hidden"></div>
-          <div class="composer-row">
-            <textarea id="input" rows="1" placeholder="@成员 派活或讨论 · #技能名 点名外挂技能 · Enter 发送"></textarea>
+          <div class="composer-box">
+            <textarea id="input" rows="1" placeholder="发言 · @成员 派活或讨论 · #技能名 点名外挂 · Enter 发送"></textarea>
             <button id="btnSend" class="btn primary">发送</button>
           </div>
         </div>
@@ -86,7 +87,7 @@
 
       <aside id="panel" class="hidden">
         <header class="panel-head">
-          <span class="panel-title">Mission Control</span>
+          <span class="panel-title">任务板</span>
           <button id="btnClosePanel" class="mini">×</button>
         </header>
         <div id="pipeline" class="pipeline"></div>
