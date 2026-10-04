@@ -94,10 +94,10 @@ function renderStats(jobs) {
   const j = jobs || S._jobs || { queued: 0, working: 0 };
   S._jobs = jobs || S._jobs;
   $('liveStats').innerHTML =
-    `<span class="stat">SEQ <b>${pad2(S.seq % 100)}</b></span>` +
-    `<span class="stat">ONLINE <b class="live">${online}</b>/${S.agents.length}</span>` +
-    `<span class="stat">JOB <b>${j.working || 0}</b>·${j.queued || 0}</span>` +
-    `<span class="stat">MISSION <b>${S.missions.filter((m) => m.status === 'open').length}</b></span>`;
+    `<span class="stat">在线 <b class="live">${online}</b>/${S.agents.length}</span>` +
+    `<span class="stat">SEQ <b>${S.seq}</b></span>` +
+    `<span class="stat">作业 <b>${j.working || 0}</b></span>` +
+    `<span class="stat">课题 <b>${S.missions.filter((m) => m.status === 'open').length}</b></span>`;
 }
 
 /* ---------------- 侧栏：索引 + 乘组清单 ---------------- */
@@ -109,10 +109,8 @@ function renderSidebar() {
     const li = document.createElement('li');
     if (c.id === S.cur) li.classList.add('on');
     li.innerHTML =
-      `<span class="idx">${pad2(i + 1)}</span>` +
-      `<span class="ch-icon">${c.type === 'dm' ? '私' : '群'}</span>` +
       `<span class="ch-name">${esc(c.name)}</span>` +
-      (c.type === 'group' ? `<span class="badge">${c.members.length}</span>` : '');
+      (c.type === 'group' ? `<span class="n-members">${c.members.length} 人</span>` : `<span class="n-members">私聊</span>`);
     li.onclick = () => openChannel(c.id);
     ul.appendChild(li);
   });
@@ -123,8 +121,8 @@ function renderSidebar() {
     const li = document.createElement('li');
     li.title = a.persona || '';
     const role = a.kind === 'human'
-      ? (a.name === '教授' ? 'PI' : 'researcher')
-      : `agent · ${(a.owner || '?')} 的`;
+      ? (a.name === '教授' ? 'PI' : '研究者')
+      : `${a.owner || '?'} 的 agent`;
     li.innerHTML =
       `<span class="avatar" style="background:hsl(${a.hue},26%,36%)">${esc(a.name[0])}</span>` +
       `<span class="m-name">${esc(a.name)}</span>` +
@@ -157,8 +155,8 @@ async function openChannel(id) {
   $('chatSub').textContent = c?.topic || (c?.type === 'dm' ? '成果汇报与审阅（仅你们可见）' : '');
   $('chatMeta').innerHTML = c
     ? (c.type === 'dm'
-        ? `DM · ${esc(c.members.join(' × '))}`
-        : `GROUP ×${c.members.length}${c.owner ? ' · OWNER ' + esc(c.owner) : ''}`)
+        ? `私聊`
+        : `${c.members.length} 名成员${c.owner ? ' · 群主 ' + esc(c.owner) : ''}`)
     : '';
   renderSidebar();
   const j = await api('/api/messages?channel=' + encodeURIComponent(id) + '&limit=100');
@@ -188,9 +186,7 @@ function highlight(text, mentions = [], skills = []) {
 function renderMsg(m) {
   const div = document.createElement('div');
   const d = new Date(m.ts);
-  const gutter =
-    `<div class="gutter"><span class="t">${pad2(d.getHours())}:${pad2(d.getMinutes())}</span>` +
-    `<span class="n">#${String(m.seq).padStart(3, '0')}</span></div>`;
+  const time = pad2(d.getHours()) + ':' + pad2(d.getMinutes());
 
   if (m.kind === 'system') {
     div.className = 'msg sys';
@@ -199,15 +195,14 @@ function renderMsg(m) {
   }
   if (m.kind === 'card') {
     div.className = 'msg';
-    div.innerHTML = gutter + `<div class="body"></div>`;
+    div.innerHTML = `<div class="body"></div>`;
     div.querySelector('.body').appendChild(renderDoc(m));
     return div;
   }
-  const a = agentOf(m.from);
   div.className = 'msg' + (m.from === S.me.name ? ' mine' : '');
-  div.innerHTML = gutter +
+  div.innerHTML =
     `<div class="body">` +
-    `<div class="meta"><b>${esc(m.from)}</b><span class="who-kind">${a?.kind === 'agent' ? 'AGENT' : 'HUMAN'}</span></div>` +
+    `<div class="meta"><b>${esc(m.from)}</b><span class="time">${time}</span></div>` +
     `<div class="bubble">${highlight(m.text, m.mentions, m.skills)}</div></div>`;
   return div;
 }
@@ -226,7 +221,7 @@ function renderDoc(m) {
 
   if (c.type === 'mission') {
     box.innerHTML = head('课题', c.title, 'dispatched', '开放') +
-      `<div class="doc-meta">LEADER ${esc(c.leader)}</div>` +
+      `<div class="doc-meta">领导 ${esc(c.leader)}</div>` +
       (c.brief ? `<div class="digest">${esc(c.brief)}</div><div style="height:10px"></div>` : '');
   } else if (c.type === 'task' || c.type === 'redispatch') {
     box.innerHTML =
@@ -323,10 +318,9 @@ function renderPipeline() {
     ['派发', by.dispatched], ['执行', by.working], ['待审', by.reported], ['回群', by.published], ['失败', by.failed],
   ];
   const total = stages.reduce((s, [, v]) => s + v, 0);
-  $('pipeline').innerHTML = stages.map(([l, v]) => {
-    const hot = (l === '待审' && v > 0) || (l === '执行' && v > 0);
-    return `<div class="pipe-stage${hot ? ' hot' : ''}" title="${l} ${v}"><div class="c">${v}</div><div class="l">${l}</div></div>`;
-  }).join('') + (total ? '' : `<div class="pipe-stage" style="flex:2.2"><div class="l" style="margin-top:9px">NO ACTIVE TASKS</div></div>`);
+  $('pipeline').innerHTML = total
+    ? stages.map(([l, v]) => `<span class="${(l === '待审' || l === '执行') && v > 0 ? 'hot' : ''}">${l} <b>${v}</b></span>`).join('<span class="sep">·</span>')
+    : '暂无进行中的任务';
 }
 
 function renderPanel() {
@@ -343,7 +337,7 @@ function renderPanel() {
     for (const { m, t } of pend) {
       const c = document.createElement('div');
       c.className = 'mission-card';
-      c.innerHTML = `<div class="mc-head"><span class="k" style="background:var(--warn)">待审</span><span class="m-title">${esc(t.title)}</span></div>` +
+      c.innerHTML = `<div class="mc-head"><span class="k v-warn">待审</span><span class="m-title">${esc(t.title)}</span></div>` +
         `<div class="mc-body"><div class="m-meta">${esc(m.title)} · ${esc(t.assignee)} R${t.attempts} 产出</div>` +
         `<div class="digest">${esc(t.reportDigest || '')}</div></div>`;
       const acts = document.createElement('div');
@@ -359,8 +353,8 @@ function renderPanel() {
     for (const d of S.domains) {
       const c = document.createElement('div');
       c.className = 'mission-card';
-      c.innerHTML = `<div class="mc-head"><span class="k" style="background:var(--tech)">域包</span><span class="m-title">${esc(d.name)} <span class="badge">v${esc(d.version)}</span></span></div>` +
-        `<div class="mc-body"><div class="m-meta" style="font-family:var(--sans);color:var(--ink2)">${esc(d.description)}</div>` +
+      c.innerHTML = `<div class="mc-head"><span class="k v-acc">域包</span><span class="m-title">${esc(d.name)} <span class="badge">v${esc(d.version)}</span></span></div>` +
+        `<div class="mc-body"><div class="m-meta" style="color:var(--ink2)">${esc(d.description)}</div>` +
         d.skills.map((s) => `<div class="task-row" style="cursor:default"><span class="badge dom">#${esc(s.name)}</span><span class="t-title">${esc(s.description)}</span></div>`).join('') +
         `</div>`;
       const srch = document.createElement('div');
@@ -394,9 +388,9 @@ function missionCard(m) {
   const c = document.createElement('div');
   c.className = 'mission-card';
   const isLeader = m.leader === S.me.name;
-  c.innerHTML = `<div class="mc-head"><span class="k" style="background:${m.status === 'closed' ? 'var(--mut)' : 'var(--acc2)'}">${m.status === 'closed' ? '结题' : '课题'}</span><span class="m-title">${esc(m.title)}</span><span class="badge">R${m.round}</span></div>` +
+  c.innerHTML = `<div class="mc-head"><span class="k ${m.status === 'closed' ? 'v-mut' : 'v-ink'}">${m.status === 'closed' ? '结题' : '课题'}</span><span class="m-title">${esc(m.title)}</span><span class="badge">R${m.round}</span></div>` +
     `<div class="mc-body">` +
-    `<div class="m-meta">LEADER ${esc(m.leader)} · ${m.progress.done}/${m.progress.total} DONE</div>` +
+    `<div class="m-meta">领导 ${esc(m.leader)} · ${m.progress.done}/${m.progress.total} 完成</div>` +
     `<div class="pbar"><div style="width:${m.progress.pct}%;${m.progress.pct >= 100 ? 'background:var(--ok)' : ''}"></div></div>` +
     `<div class="m-meta" style="margin-top:2px">${progressLine(m.progress)}</div>` +
     m.tasks.map((t) => `<div class="task-row" onclick="showReport('${esc(t.id)}')"><span class="status-chip st-${esc(t.status)}">${esc(t.badge)}</span><span class="t-title">${esc(t.title)}</span><span class="badge owner">${esc(t.assignee)}</span></div>`).join('') +
