@@ -124,7 +124,7 @@ function renderSidebar() {
       ? (a.name === '教授' ? 'PI' : '研究者')
       : `${a.owner || '?'} 的 agent`;
     li.innerHTML =
-      `<span class="avatar" style="background:hsl(${a.hue},26%,36%)">${esc(a.name[0])}</span>` +
+      `<span class="avatar" style="background:hsl(${a.hue},20%,42%)">${esc(a.name[0])}</span>` +
       `<span class="m-name">${esc(a.name)}</span>` +
       `<span class="m-role"><span class="dot${a.online ? ' on' : ''}"></span> ${esc(role)}</span>` +
       `<span class="m-tags">` +
@@ -209,6 +209,16 @@ function renderMsg(m) {
 
 /* ---------------- 文档卡（工作流事件） ---------------- */
 
+function md(text) {
+  // 轻量 Markdown：先 esc 再转内联标记（内容永远先转义，无注入面）
+  let h = esc(String(text ?? ''));
+  h = h.replace(/^#{1,3} (.+)$/gm, '<span class="md-h">$1</span>');
+  h = h.replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>');
+  h = h.replace(/`([^`]+)`/g, '<code>$1</code>');
+  h = h.replace(/^[-·] (.+)$/gm, '<span class="md-li">$1</span>');
+  return h;
+}
+
 function renderDoc(m) {
   const c = m.card || {};
   const box = document.createElement('div');
@@ -222,19 +232,19 @@ function renderDoc(m) {
   if (c.type === 'mission') {
     box.innerHTML = head('课题', c.title, 'dispatched', '开放') +
       `<div class="doc-meta">领导 ${esc(c.leader)}</div>` +
-      (c.brief ? `<div class="digest">${esc(c.brief)}</div><div style="height:10px"></div>` : '');
+      (c.brief ? `<div class="digest">${md(c.brief)}</div><div style="height:10px"></div>` : '');
   } else if (c.type === 'task' || c.type === 'redispatch') {
     box.innerHTML =
       head(c.type === 'redispatch' ? '重做' : '任务', c.title, t ? t.status : 'dispatched', t ? t.badge : '已派发') +
       `<div class="doc-meta">${esc(c.missionTitle || '')} · 执行 ${esc(c.assignee)} → 审阅 ${esc(c.owner)} · R${c.attempts}</div>` +
-      (c.brief ? `<div class="digest">${esc(c.brief)}</div>` : '') +
-      (c.comment ? `<div class="digest note">审阅意见：${esc(c.comment)}</div>` : '') +
+      (c.brief ? `<div class="digest">${md(c.brief)}</div>` : '') +
+      (c.comment ? `<div class="digest note">审阅意见：${md(c.comment)}</div>` : '') +
       `<div style="height:10px"></div>`;
   } else if (c.type === 'review') {
     box.innerHTML =
       head('待审', c.title, t ? t.status : 'reported', t ? t.badge : '待审阅') +
       `<div class="doc-meta">${esc(c.missionTitle)} · ${esc(c.agentName)} R${c.attempts} 产出 → ${esc(taskById(c.taskId)?.owner || '主人')}</div>` +
-      `<div class="digest">${esc(c.digest)}</div>`;
+      `<div class="digest">${md(c.digest)}</div>`;
     const acts = document.createElement('div');
     acts.className = 'doc-actions';
     const full = document.createElement('button'); full.className = 'btn ghost'; full.textContent = '查看全文';
@@ -255,7 +265,7 @@ function renderDoc(m) {
     box.innerHTML =
       head('回群', c.title, 'published', '已回群') +
       `<div class="doc-meta">${esc(c.agentName)} 产出 · ${esc(c.ownerName)} 已批准</div>` +
-      `<div class="digest">${esc(c.digest)}</div>` +
+      `<div class="digest">${md(c.digest)}</div>` +
       (c.reviewComment ? `<div class="doc-meta" style="padding-top:6px">审阅意见：${esc(c.reviewComment)}</div>` : '');
     const acts = document.createElement('div');
     acts.className = 'doc-actions';
@@ -286,9 +296,9 @@ async function showReport(taskId) {
     openModal(`
       <h2>${esc(t.title)}</h2>
       <p class="hint">${esc(t.badge)} · ${esc(t.assignee)} → ${esc(t.owner)} · R${t.attempts} · ID <span class="mono">${esc(t.id)}</span></p>
-      <label>任务书</label><div class="digest">${esc(t.brief)}</div>
-      <label>成果全文</label><div class="digest" style="max-height:44vh">${esc(t.report || '（尚无成果）')}</div>
-      ${t.review ? `<label>最近审阅</label><div class="digest">${esc(t.review.decision)}：${esc(t.review.comment || '')}</div>` : ''}
+      <label>任务书</label><div class="digest">${md(t.brief)}</div>
+      <label>成果全文</label><div class="digest" style="max-height:44vh">${md(t.report || '（尚无成果）')}</div>
+      ${t.review ? `<label>最近审阅</label><div class="digest">${esc(t.review.decision)}：${md(t.review.comment || '')}</div>` : ''}
       <div class="foot"><button class="btn" onclick="closeModal()">关闭</button></div>`);
   } catch (e) { toast(e.message, true); }
 }
@@ -339,7 +349,7 @@ function renderPanel() {
       c.className = 'mission-card';
       c.innerHTML = `<div class="mc-head"><span class="k v-warn">待审</span><span class="m-title">${esc(t.title)}</span></div>` +
         `<div class="mc-body"><div class="m-meta">${esc(m.title)} · ${esc(t.assignee)} R${t.attempts} 产出</div>` +
-        `<div class="digest">${esc(t.reportDigest || '')}</div></div>`;
+        `<div class="digest">${md(t.reportDigest || '')}</div></div>`;
       const acts = document.createElement('div');
       acts.className = 'mc-actions';
       const ok = document.createElement('button'); ok.className = 'btn ok'; ok.textContent = '批准 · 回群';
