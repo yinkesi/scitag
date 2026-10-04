@@ -93,11 +93,13 @@ function renderStats(jobs) {
   const online = S.agents.filter((a) => a.online).length;
   const j = jobs || S._jobs || { queued: 0, working: 0 };
   S._jobs = jobs || S._jobs;
-  $('liveStats').innerHTML =
-    `<span class="stat">在线 <b class="live">${online}</b>/${S.agents.length}</span>` +
-    `<span class="stat">SEQ <b>${S.seq}</b></span>` +
-    `<span class="stat">作业 <b>${j.working || 0}</b></span>` +
-    `<span class="stat">课题 <b>${S.missions.filter((m) => m.status === 'open').length}</b></span>`;
+  const parts = [
+    `在线 <b class="live">${online}</b>/${S.agents.length}`,
+    `SEQ <b>${S.seq}</b>`,
+    `作业 <b>${j.working || 0}</b>`,
+    `课题 <b>${S.missions.filter((m) => m.status === 'open').length}</b>`,
+  ];
+  $('liveStats').innerHTML = parts.map((p) => `<span class="stat">${p}</span>`).join('<span class="sep">·</span>');
 }
 
 /* ---------------- 侧栏：索引 + 乘组清单 ---------------- */
@@ -134,6 +136,11 @@ function renderSidebar() {
     li.onclick = () => openDm(a.name);
     rl.appendChild(li);
   }
+
+  const role = S.me ? (S.me.kind === 'human' ? (S.me.name === '教授' ? 'PI · 课题领导' : '研究者') : 'agent') : '';
+  $('meCard').innerHTML = S.me
+    ? `<span class="avatar" style="background:hsl(${S.me.hue},20%,42%)">${esc(S.me.name[0])}</span><span><div class="me-name">${esc(S.me.name)}</div><div class="me-role">${esc(role)}</div></span>`
+    : '';
 
   $('domainsInfo').innerHTML = S.domains.length
     ? S.domains.map((d) => `${esc(d.name)} · ${d.skills.length}技能 / ${d.kbCount}条`).join('<br>')
