@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SciTag · 课题组协作台</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- 登录闸门 -->
+  <div id="gate" class="gate hidden">
+    <div class="gate-inner">
+      <div class="gate-brand">
+        <div class="logo-lg"></div>
+        <h1>SciTag</h1>
+        <p class="gate-tag">RESEARCH GROUP CONSOLE</p>
+        <p class="gate-desc">领导派课题 · agent 带外挂知识库与技能干活<br>成果私聊报主人审阅 · 批准后回群 · 循环至收敛</p>
+        <p class="gate-ver">CONSOLE v1.0 · ZERO-DEPENDENCY</p>
+      </div>
+      <div class="gate-card">
+        <div class="gate-card-head">登入控制台</div>
+        <p class="gate-hint">演示乘组一键进入，或用名字 + token</p>
+        <ul class="gate-quick" id="gateQuick">
+          <li data-login="教授" data-token="demo-jiaoshou"><b>教授</b><span>PI · 课题领导：建课题、派活、汇总</span><i>→</i></li>
+          <li data-login="王研" data-token="demo-wangyan"><b>王研</b><span>研究者 · 小王的主人：审阅成果</span><i>→</i></li>
+          <li data-login="李研" data-token="demo-liyan"><b>李研</b><span>研究者 · 小李的主人：审阅成果</span><i>→</i></li>
+          <li data-login="小王" data-token="demo-xiaowang"><b>小王</b><span>agent · 挂 bone-scaffold 域包</span><i>→</i></li>
+        </ul>
+        <div class="gate-form">
+          <input id="loginName" placeholder="名字" maxlength="24">
+          <input id="loginToken" placeholder="token" class="mono">
+          <button id="btnLogin" class="btn primary">进入</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="app" class="hidden">
+    <!-- 仪器条 -->
+    <header id="topbar">
+      <div class="brand">
+        <span class="logo"></span>
+        <span class="brand-name">SciTag</span>
+        <span class="brand-sub">RESEARCH GROUP CONSOLE</span>
+      </div>
+      <div id="liveStats" class="live-stats" title="平台实时指标"></div>
+      <div class="topbar-actions">
+        <button id="btnNewMission" class="btn primary">＋ 新课题</button>
+        <button id="btnPanel" class="btn">任务板</button>
+      </div>
+    </header>
+
+    <div id="workspace">
+      <aside id="sidebar">
+        <div class="side-scroll">
+          <section class="side-sec">
+            <div class="side-sec-head"><span>Index · 会话</span></div>
+            <ul id="channelList" class="side-list"></ul>
+          </section>
+          <section class="side-sec">
+            <div class="side-sec-head"><span>Manifest · 成员</span><button id="btnAddAgent" class="mini" title="接入新 agent">＋</button></div>
+            <ul id="rosterList" class="manifest"></ul>
+          </section>
+        </div>
+        <div class="side-foot" id="domainsInfo"></div>
+      </aside>
+
+      <main id="main">
+        <header id="chatHead">
+          <div class="chat-head-txt">
+            <div id="chatTitle">—</div>
+            <div id="chatSub"></div>
+          </div>
+          <div id="chatMeta" class="chat-meta"></div>
+        </header>
+        <div id="msgList"></div>
+        <div id="composer">
+          <div id="popup" class="hidden"></div>
+          <div class="composer-row">
+            <span class="composer-prompt">›</span>
+            <textarea id="input" rows="1" placeholder="@成员 派活或讨论 · #技能名 点名外挂技能 · Enter 发送"></textarea>
+            <button id="btnSend" class="btn primary">发送</button>
+          </div>
+        </div>
+      </main>
+
+      <aside id="panel" class="hidden">
+        <header class="panel-head">
+          <span class="panel-title">Mission Control</span>
+          <button id="btnClosePanel" class="mini">×</button>
+        </header>
+        <div id="pipeline" class="pipeline"></div>
+        <div class="tabs">
+          <button data-tab="missions" class="on">课题</button>
+          <button data-tab="reviews">待我审</button>
+          <button data-tab="domains">域包</button>
+        </div>
+        <div id="panelBody" class="panel-body"></div>
+      </aside>
+    </div>
+  </div>
+
+  <div id="modal" class="modal-mask hidden"><div class="modal" id="modalBody"></div></div>
+  <div id="toast" class="hidden"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>

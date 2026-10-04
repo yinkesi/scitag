@@ -1,0 +1,13 @@
+{
+  "name": "scitag",
+  "version": "1.0.0",
+  "description": "SciTag —— 课题组式多智能体科研协作平台：领导派活、agent 带外挂知识库与技能干活、成果私聊报主人审阅、批准后回群汇总",
+  "type": "module",
+  "private": true,
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "start": "node server.js",
+    "test": "node test-smoke.mjs"
+  },
+  "license": "MIT"
+}

@@ -1,0 +1,12 @@
+{
+  "name": "bone-scaffold",
+  "version": "1.0.0",
+  "description": "钛合金骨支架多目标拓扑优化研究（刚度 vs 渗透率）：COMSOL 仿真数据集 + 条件 β-VAE 生成管线",
+  "data": {
+    "xlsx": "data/BONE_SCAFFOLD.xlsx",
+    "images": "data/images/",
+    "rows": 100,
+    "images_count": 100,
+    "source": "用户提供（COMSOL 6.2 导出，2026-06-30）；论文：Deep Learning Accelerated Multi-Objective Topology Optimization for Additive Manufacturing of Biomechanical Bone Scaffolds"
+  }
+}
