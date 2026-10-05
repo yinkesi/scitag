@@ -23,6 +23,7 @@
  */
 'use strict';
 import { spawn } from 'node:child_process';
+import { runAnalysis } from './research.mjs';
 
 export const DEFAULT_TIMEOUT_MS = 300_000; // 单任务执行上限（真 harness 级的活给足时间）
 export const MAX_OUTPUT = 12_000;          // 成果正文截断（report 上限 20k，留群消息摘要余地）
@@ -191,6 +192,17 @@ registerAdapter({
 /* ------------------------------------------------------------------ */
 
 registerAdapter({
+  id: 'analysis',
+  label: '科研分析（真实数据计算）',
+  async exec(job, options = {}) {
+    const domain = options.domain || 'bone-scaffold';
+    if (!job.domains?.includes(domain)) return { ok: false, text: `agent 未挂载分析域 ${domain}` };
+    const result = await runAnalysis({ domain, command: options.command || 'stats', target: options.target });
+    return { ...result, analysisRuns: [result] };
+  },
+});
+
+registerAdapter({
   id: 'llm',
   label: 'LLM（OpenAI 兼容接口）',
   async exec(job, options = {}) {
@@ -199,7 +211,22 @@ registerAdapter({
     if (!baseUrl || !model) return { ok: false, text: 'llm 后端缺少 baseUrl / model 配置' };
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), options.timeoutMs || 120_000);
+    const analysisRuns = [];
+    const evidence = () => ({ analysisRuns, provenance: analysisRuns.at(-1)?.provenance || null });
+    const enabled = options.enableTools !== false && job.domains?.includes('bone-scaffold');
+    const tools = enabled ? [{ type: 'function', function: {
+      name: 'analyze_scaffold', description: '实际计算骨支架数据的统计、拟合或 compliance ≤ target 逆设计。',
+      parameters: { type: 'object', properties: {
+        command: { type: 'string', enum: ['stats', 'fit', 'inverse'] },
+        target: { type: 'number', description: 'inverse 必填，有限正数' },
+      }, required: ['command'], additionalProperties: false },
+    } }] : undefined;
+    const messages = [
+      { role: 'system', content: '你是一个严谨的科研协作 agent，成果供人类研究者审阅。涉及数值计算时须调用可用的分析工具，以其真实输出为依据。工具失败要明确说明，禁止编造计算结果。' },
+      { role: 'user', content: buildPrompt(job) },
+    ];
     try {
+      for (let round = 0; round < 4; round++) {
       const r = await fetch(baseUrl + '/chat/completions', {
         method: 'POST',
         headers: {
@@ -208,22 +235,39 @@ registerAdapter({
         },
         body: JSON.stringify({
           model,
-          messages: [
-            { role: 'system', content: '你是一个严谨的科研协作 agent，成果供人类研究者审阅。' },
-            { role: 'user', content: buildPrompt(job) },
-          ],
+          messages, ...(tools ? { tools, parallel_tool_calls: false } : {}),
           temperature: options.temperature ?? 0.3,
         }),
         signal: ctrl.signal,
       });
       const j = await r.json().catch(() => null);
-      const text = j?.choices?.[0]?.message?.content || '';
-      if (!r.ok) return { ok: false, text: `llm 返回 HTTP ${r.status}：${truncate(JSON.stringify(j).slice(0, 300), 300)}` };
-      if (!text) return { ok: false, text: 'llm 返回空内容' };
-      return { ok: true, text: truncate(text, MAX_OUTPUT) };
+      const message = j?.choices?.[0]?.message;
+      if (!r.ok) return { ok: false, text: `llm 返回 HTTP ${r.status}：${truncate(JSON.stringify(j).slice(0, 300), 300)}`, ...evidence() };
+      if (message?.tool_calls?.length) {
+        if (message.tool_calls.length > 4) return { ok: false, text: '本轮工具调用数量超过上限', ...evidence() };
+        messages.push({ role: 'assistant', content: message.content || null, tool_calls: message.tool_calls });
+        for (const call of message.tool_calls) {
+          let result;
+          try {
+            if (!enabled || call.function?.name !== 'analyze_scaffold') throw new Error('工具未授权或不存在');
+            const input = JSON.parse(call.function.arguments);
+            if (!input || Array.isArray(input) || Object.keys(input).some(k => !['command', 'target'].includes(k))) {
+              throw new Error('工具参数形状无效');
+            }
+            result = await runAnalysis({ domain: 'bone-scaffold', command: input.command, target: input.target }, { signal: ctrl.signal });
+            analysisRuns.push(result);
+          } catch (error) { result = { ok: false, text: String(error?.message || error) }; }
+          messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(result) });
+        }
+        continue;
+      }
+      if (!message?.content) return { ok: false, text: 'llm 返回空内容', ...evidence() };
+      return { ok: true, text: truncate(message.content, MAX_OUTPUT), ...evidence() };
+      }
+      return { ok: false, text: '分析工具对话达到上限（4次模型请求），请缩小任务范围', ...evidence() };
     } catch (e) {
       const msg = String(e?.message || e);
-      return { ok: false, text: 'llm 调用失败：' + (ctrl.signal.aborted ? `请求超时/中断（${msg}）` : msg.slice(0, 200)) };
+      return { ok: false, text: 'llm 调用失败：' + (ctrl.signal.aborted ? `请求超时/中断（${msg}）` : msg.slice(0, 200)), ...evidence() };
     } finally {
       clearTimeout(timer);
     }
