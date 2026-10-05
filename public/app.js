@@ -304,7 +304,19 @@ async function showReport(taskId) {
       <h2>${esc(t.title)}</h2>
       <p class="hint">${esc(t.badge)} · ${esc(t.assignee)} → ${esc(t.owner)} · R${t.attempts} · ID <span class="mono">${esc(t.id)}</span></p>
       <label>任务书</label><div class="digest">${md(t.brief)}</div>
-      <label>成果全文</label><div class="digest" style="max-height:44vh">${md(t.report || '（尚无成果）')}</div>
+      <label>成果全文</label><div class="digest" style="max-height:44vh">${md(t.report || (t.status === 'reported' ? '成果待主人审阅，批准后开放。' : '（尚无成果）'))}</div>
+      ${t.failReason ? `<label>失败详情</label><div class="digest">${md(t.failReason)}</div>` : ''}
+      ${t.provenance ? `<details class="evidence"><summary>核验计算记录</summary>
+        <p>执行时间：${esc(new Date(t.provenance.at).toLocaleString())}</p>
+        <p>执行结果：${t.provenance.exitCode === 0 ? '成功' : '失败'}（退出码 ${esc(t.provenance.exitCode ?? '未启动')}）</p>
+        <p>分析步骤：${esc(t.provenance.args?.join(' '))}</p>
+        <p>数据校验值（SHA256）：<code>${esc(t.provenance.dataSha256)}</code></p>
+        <p>脚本校验值（SHA256）：<code>${esc(t.provenance.scriptSha256)}</code></p>
+        <label>原始计算输出</label><div class="digest">${md(t.provenance.output)}</div></details>` : ''}
+      ${t.analysisRuns?.length ? `<details class="evidence"><summary>全部分析记录（${t.analysisRuns.length} 次）</summary>${t.analysisRuns.map((run, index) =>
+        `<label>第 ${index + 1} 次 · ${esc(run.provenance?.command || '')} · ${run.ok ? '成功' : '失败'}</label><div class="digest">${md(run.text)}</div>`).join('')}</details>` : ''}
+      ${t.reportVersions?.length ? `<details class="evidence"><summary>历史版本与审阅（${t.reportVersions.length} 轮）</summary>${t.reportVersions.map(v =>
+        `<label>第 ${v.attempt} 轮 · ${esc(new Date(v.at).toLocaleString())}</label><div class="digest">${md(v.report)}</div><p>${v.review ? `${v.review.decision === 'approve' ? '批准' : '驳回'}：${esc(v.review.comment || '无意见')}` : '待审阅'}</p>`).join('')}</details>` : ''}
       ${t.review ? `<label>最近审阅</label><div class="digest">${esc(t.review.decision)}：${md(t.review.comment || '')}</div>` : ''}
       <div class="foot"><button class="btn" onclick="closeModal()">关闭</button></div>`);
   } catch (e) { toast(e.message, true); }
@@ -515,15 +527,49 @@ $('btnAddAgent').onclick = () => {
     <label>人设</label><input id="agPersona" placeholder="擅长什么、口吻如何">
     <label>挂载域包</label><div class="chip-select" id="agDomains">${S.domains.map((d) => `<span class="chip" data-d="${esc(d.name)}">${esc(d.name)}</span>`).join('')}</div>
     <label>执行后端</label><select id="agAdapter">${backends.map((b) => `<option value="${esc(b.id)}">${esc(b.label)}</option>`).join('')}</select>
+    <div id="agAnalysisFields" class="hidden">
+      <label for="agCommand">分析步骤</label><select id="agCommand"><option value="stats">数据统计</option><option value="fit">函数拟合</option><option value="inverse">逆设计</option></select>
+      <div id="agTargetRow" class="hidden"><label for="agTarget">compliance 目标上限</label><input id="agTarget" type="number" step="any" min="0" value="8e-11"></div>
+      <p class="hint">对挂载的骨支架数据实际计算，报告先交给主人审阅。</p>
+    </div>
+    <div id="agLlmFields" class="hidden">
+      <label for="agBaseUrl">模型接口地址</label><input id="agBaseUrl" type="url" placeholder="https://你的服务地址/v1">
+      <label for="agModel">模型名称</label><input id="agModel" placeholder="服务支持的模型名称">
+      <label for="agApiKey">访问密钥（可选）</label><input id="agApiKey" type="password" autocomplete="new-password">
+      <label><input id="agTools" type="checkbox" checked> 允许模型调用骨支架分析工具</label>
+    </div>
+    <div id="agWebhookFields" class="hidden"><label for="agWebhookUrl">Agent 接入地址</label><input id="agWebhookUrl" type="url" placeholder="https://你的 agent 服务地址"></div>
     <div class="foot"><button class="btn" onclick="closeModal()">取消</button><button class="btn primary" id="agGo">注册</button></div>`);
   $('agDomains').querySelectorAll('.chip').forEach((ch) => ch.onclick = () => ch.classList.toggle('on'));
   $('agDomains').querySelectorAll('.chip')[0]?.classList.add('on');
+  $('agAdapter').onchange = () => {
+    for (const [id, kind] of [['agAnalysisFields', 'analysis'], ['agLlmFields', 'llm'], ['agWebhookFields', 'webhook']]) {
+      $(id).classList.toggle('hidden', $('agAdapter').value !== kind);
+    }
+  };
+  $('agCommand').onchange = () => $('agTargetRow').classList.toggle('hidden', $('agCommand').value !== 'inverse');
   $('agGo').onclick = async () => {
     const domains = [...$('agDomains').querySelectorAll('.chip.on')].map((c) => c.dataset.d);
     try {
+      const kind = $('agAdapter').value;
+      let options = {};
+      if (kind === 'analysis') {
+        if (!domains.includes('bone-scaffold')) throw new Error('科研分析需要挂载 bone-scaffold 域包');
+        options = { domain: 'bone-scaffold', command: $('agCommand').value };
+        if (options.command === 'inverse') {
+          options.target = Number($('agTarget').value);
+          if (!Number.isFinite(options.target) || options.target <= 0) throw new Error('目标上限须为正数');
+        }
+      } else if (kind === 'llm') {
+        options = { baseUrl: $('agBaseUrl').value.trim(), model: $('agModel').value.trim(), apiKey: $('agApiKey').value.trim(), enableTools: $('agTools').checked };
+        if (!options.baseUrl || !options.model) throw new Error('请填写模型接口地址和名称');
+      } else if (kind === 'webhook') {
+        options = { url: $('agWebhookUrl').value.trim() };
+        if (!options.url) throw new Error('请填写 Agent 接入地址');
+      }
       const r = await fetch('/api/register', {
         method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ kind: 'agent', name: $('agName').value, owner: $('agOwner').value, persona: $('agPersona').value, domains, adapter: { kind: $('agAdapter').value } }),
+        body: JSON.stringify({ kind: 'agent', name: $('agName').value, owner: $('agOwner').value, persona: $('agPersona').value, domains, adapter: { kind, options } }),
       });
       const j = await r.json();
       if (!r.ok) return toast(j.error, true);
