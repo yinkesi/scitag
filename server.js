@@ -176,6 +176,7 @@ function scanDomains() {
         version: String(meta.version || '0.0.0'),
         description: String(meta.description || ''),
         data: meta.data || null,
+        searchAliases: meta.searchAliases || {},
         dir,
         skills: skills.map(({ name, description, triggers }) => ({ name, description, triggers })),
         kbCount,
@@ -218,7 +219,17 @@ function domainSkills(domain) {
 
 function domainKbSearch(domain, q, limit = 5) {
   const kdir = path.join(DOMAINS_DIR, domain, 'kb');
-  const terms = String(q || '').trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const query = String(q || '').normalize('NFC').trim().toLowerCase();
+  const stopWords = new Set(['请', '解释', '之间', '关系', '任务', '课题', '进行', '分析']);
+  const terms = [...new Set([...new Intl.Segmenter('zh', { granularity: 'word' }).segment(query)]
+    .filter(s => s.isWordLike).map(s => s.segment).filter(s => s.length > 1 && !stopWords.has(s)))];
+  // Domain-specific aliases keep terminology consistent with the dataset dictionary.
+  const aliases = scanDomains().find(d => path.basename(d.dir) === domain)?.searchAliases || {};
+  for (const [word, alternatives] of Object.entries(aliases)) {
+    if (query.includes(word.toLowerCase())) for (const term of alternatives) {
+      if (!terms.includes(term.toLowerCase())) terms.push(term.toLowerCase());
+    }
+  }
   const scored = [];
   let files = [];
   try { files = fs.readdirSync(kdir); } catch { return []; }
@@ -234,7 +245,13 @@ function domainKbSearch(domain, q, limit = 5) {
       if (name.toLowerCase().includes(t)) score += 5; // 标题命中加权
       score += Math.min(hay.split(t).length - 1, 10);
     }
-    if (score > 0) scored.push({ score, name, snippet: digest(body.replace(/^#.*\n+/, '').replace(/\s+/g, ' '), 160) });
+    if (score > 0) {
+      const paragraphs = body.split(/\r?\n\s*\r?\n/);
+      const weight = p => terms.reduce((sum, term) => sum + Math.min(p.toLowerCase().split(term).length - 1, 10), 0);
+      const matched = paragraphs.reduce((best, p) => weight(p) > weight(best) ? p : best, '');
+      scored.push({ score, name, source: `domains/${domain}/kb/${f}`,
+        matchedTerms: terms.filter(t => hay.includes(t)), snippet: digest((matched || body).replace(/\s+/g, ' '), 600) });
+    }
   }
   return terms.length
     ? scored.sort((a, b) => b.score - a.score).slice(0, limit)
@@ -294,7 +311,7 @@ function buildContext(agentName, text, skillTags) {
 function channelHistory(channelId, agentName, n = 10) {
   const ch = db.channels[channelId];
   const a = db.agents[agentName];
-  if (!ch || !a) return [];
+  if (!ch || !a || !canReadChannel(agentName, ch)) return [];
   return db.messages
     .filter((m) => m.channel === channelId && m.kind === 'text' &&
       (a.kind === 'human' || (a.context || 'mentions') === 'channel' || routing.canReadMessage(a, m, ch)))
@@ -311,9 +328,8 @@ function pushEvent(evt) {
   evt.seq = nextSeq();
   db.events.push(evt);
   if (db.events.length > EVENT_RING) db.events.splice(0, db.events.length - EVENT_RING);
-  const payload = JSON.stringify(evt);
   for (const c of sseClients) {
-    if (visibleTo(c.name, evt)) c.res.write(`id: ${evt.seq}\ndata: ${payload}\n\n`);
+    if (visibleTo(c.name, evt)) c.res.write(`id: ${evt.seq}\ndata: ${JSON.stringify(eventFor(c.name, evt))}\n\n`);
   }
   const waiters = [...eventWaiters];
   eventWaiters.clear();
@@ -325,18 +341,21 @@ function visibleTo(name, evt) {
   if (!name) return false;
   const a = db.agents[name];
   const isHuman = !a || a.kind === 'human';
-  if (evt.type === 'presence' || evt.type === 'channel') return true;
+  if (evt.type === 'presence') return true;
+  if (evt.type === 'channel') return canReadChannel(name, channelOf(evt.channel.id));
   if (evt.type === 'mission' || evt.type === 'task') {
     // 工作流事件：人看所在群；agent 只看自己是 leader / assignee 的
     const ch = channelOf(evt.channel);
-    if (isHuman) return !!(ch && (ch.isPublic || ch.members.includes(name)));
-    return evt.leader === name || evt.assignee === name;
+    if (!canReadChannel(name, ch)) return false;
+    if (isHuman) return true;
+    return evt.leader === name || evt.assignee === name ||
+      (evt.type === 'mission' && canReadMission(name, db.missions[evt.mission.id]));
   }
   if (evt.type === 'message') {
     const ch = channelOf(evt.message.channel);
     if (!ch) return false;
     if (ch.type === 'dm') return ch.members.includes(name);
-    if (!(ch.isPublic || ch.members.includes(name))) return false;
+    if (!canReadChannel(name, ch)) return false;
     if (evt.message.suppressed && evt.message.from !== name && !isHuman) return false;
     if (isHuman || (a.context || 'mentions') === 'channel') return true;
     return routing.canReadMessage(a, evt.message, ch);
@@ -345,15 +364,69 @@ function visibleTo(name, evt) {
     const ch = channelOf(evt.channel);
     if (!ch) return false;
     if (ch.type === 'dm') return ch.members.includes(name);
-    if (!(ch.isPublic || ch.members.includes(name))) return false;
+    if (!canReadChannel(name, ch)) return false;
     if (isHuman || (a.context || 'mentions') === 'channel') return true;
     const m = db.messages.find((x) => x.seq === evt.msgSeq);
     return evt.name === name || !!(m && m.from === name);
   }
-  return true;
+  if (evt.type === 'typing') return canReadChannel(name, channelOf(evt.channel));
+  return false;
 }
 
 const channelOf = (id) => db.channels[id] || null;
+
+function canReadChannel(name, ch) {
+  const actor = db.agents[name];
+  return !!(actor && ch && (ch.members.includes(name) ||
+    (ch.type === 'group' && ch.isPublic && actor.kind === 'human')));
+}
+
+function canReadTask(name, task) {
+  if (!task || !db.agents[name]) return false;
+  if (task.owner === name || task.assignee === name) return true;
+  const mission = missionOf(task);
+  return canReadChannel(name, channelOf(mission?.channel)) &&
+    (db.agents[name].kind === 'human' || mission?.leader === name);
+}
+
+function canReadMission(name, mission) {
+  return !!(mission && canReadChannel(name, channelOf(mission.channel)) &&
+    (db.agents[name]?.kind === 'human' || mission.leader === name ||
+      mission.taskIds.some(id => db.tasks[id]?.assignee === name)));
+}
+
+function canReadReport(name, task) {
+  return task.owner === name || task.assignee === name ||
+    (task.status === 'published' && canReadTask(name, task));
+}
+
+function messageFor(name, message) {
+  if (message.card?.type === 'fail') {
+    const task = db.tasks[message.card.taskId];
+    if (!task || (task.owner !== name && task.assignee !== name)) return { ...message,
+      card: { ...message.card, reason: '执行失败，详细信息已交给主人处理' } };
+  }
+  if (message.card?.type === 'publish') {
+    const task = db.tasks[message.card.taskId];
+    if (!task || !canReadReport(name, task)) return { ...message,
+      card: { ...message.card, digest: undefined, reviewComment: undefined } };
+  }
+  if (message.card?.type !== 'redispatch') return message;
+  const task = db.tasks[message.card.taskId];
+  if (task && (task.owner === name || task.assignee === name)) return message;
+  return { ...message, card: { ...message.card, comment: undefined } };
+}
+
+// Old persisted events pass through the same redaction as current REST responses.
+function eventFor(name, event) {
+  if (event.type === 'task') return { ...event, task: pubTask(event.task, { forName: name }) };
+  if (event.type === 'mission') {
+    const tasks = (event.mission.tasks || []).filter(t => canReadTask(name, t)).map(t => pubTask(t, { forName: name }));
+    return { ...event, mission: { ...event.mission, taskIds: tasks.map(t => t.id), tasks } };
+  }
+  if (event.type === 'message') return { ...event, message: messageFor(name, event.message) };
+  return event;
+}
 
 /* ---------------- 消息（含工作流卡片） ---------------- */
 
@@ -373,7 +446,8 @@ function addMessage(channel, from, text, opts = {}) {
   const kind = opts.kind || 'text';
   const mentions = opts.mentions !== undefined ? opts.mentions
     : kind === 'text' ? routing.parseMentions(text, Object.keys(db.agents)) : [];
-  let targets = routing.expandMentions(mentions, ch, db.agents, { exclude: [from] });
+  let targets = routing.expandMentions(mentions, ch, db.agents, { exclude: [from] })
+    .filter(name => ch.members.includes(name));
   const fromKind = opts.fromKind || db.agents[from]?.kind || 'system';
   let tripped = false;
   if (fromKind === 'agent' && ch.type === 'group') {
@@ -535,24 +609,34 @@ let presenceTimer = setInterval(() => {
 
 /* ---------------- 工作流胶水（server 层副作用） ---------------- */
 
-function pubTask(t, { withReport = false } = {}) {
+function pubTask(t, { withReport = false, forName = null } = {}) {
+  const readable = !!forName && canReadReport(forName, t);
+  const privateReader = t.owner === forName || t.assignee === forName;
   const out = {
     id: t.id, missionId: t.missionId, assignee: t.assignee, owner: t.owner,
-    title: t.title, brief: t.brief, status: t.status, badge: workflow.TASK_BADGE[t.status],
+    title: t.title, brief: privateReader ? t.brief : (t.initialBrief ?? t.brief?.split('\n\n【主人第')[0]),
+    status: t.status, badge: workflow.TASK_BADGE[t.status],
     skills: t.skills || [],
     attempts: t.attempts, maxAttempts: t.maxAttempts,
-    review: t.review || null, publishedSeq: t.publishedSeq || null,
+    review: readable ? (t.review || null) : null, publishedSeq: t.publishedSeq || null,
     createdAt: t.createdAt, updatedAt: t.updatedAt,
     history: t.history || [],
   };
-  if (withReport) out.report = t.report;
-  else out.reportDigest = t.report ? digest(t.report, 200) : null;
+  out.reportDigest = readable ? (t.report ? digest(t.report, 200) : t.reportDigest || null) : null;
+  if (withReport && readable) {
+    out.report = t.report;
+    out.provenance = t.provenance || null;
+    out.analysisRuns = t.analysisRuns || [];
+    if (privateReader) out.reportVersions = t.reportVersions || [];
+    if (privateReader) out.failReason = t.failReason || null;
+  }
   return out;
 }
 
-function pubMission(m) {
-  const tasks = m.taskIds.map((id) => db.tasks[id]).filter(Boolean);
-  return { ...m, progress: workflow.missionProgress(tasks), tasks: tasks.map((t) => pubTask(t)) };
+function pubMission(m, forName = null) {
+  const tasks = m.taskIds.map((id) => db.tasks[id]).filter(t => t && (!forName || canReadTask(forName, t)));
+  return { ...m, taskIds: tasks.map(t => t.id), progress: workflow.missionProgress(tasks),
+    tasks: tasks.map((t) => pubTask(t, { forName })) };
 }
 
 function missionOf(t) { return db.missions[t.missionId] || null; }
@@ -579,7 +663,18 @@ function joinChannel(ch, name) {
 }
 
 /** 派活（API 与 summarize 的 nextRound 共用）：建 task + 群卡 + 执行入队/外呼 */
-function createTask(mission, actor, { assignee, title, brief, skills }) {
+function normalizeTaskInput(input) {
+  if (!input || typeof input !== 'object' || Array.isArray(input) || typeof input.assignee !== 'string') return null;
+  if (['title', 'brief'].some(key => input[key] != null && typeof input[key] !== 'string')) return null;
+  if (input.skills != null && (!Array.isArray(input.skills) || input.skills.some(skill => typeof skill !== 'string'))) return null;
+  return { assignee: input.assignee, title: (input.title || '未命名任务').slice(0, 120),
+    brief: (input.brief || '').slice(0, 4000), skills: (input.skills || []).slice(0, 2).map(s => s.slice(0, 40)) };
+}
+
+function createTask(mission, actor, input) {
+  const normalized = normalizeTaskInput(input);
+  if (!normalized) return { ok: false, code: 400, reason: '任务 assignee/title/brief/skills 格式无效' };
+  const { assignee, title, brief, skills } = normalized;
   const agent = db.agents[assignee];
   const guard = workflow.canCreateTask(mission, actor, agent);
   if (!guard.ok) return guard;
@@ -696,19 +791,31 @@ const engine = makeEngine({
   save: () => save(),
   buildContext,
   history: channelHistory,
-  onTaskReport: (taskId, text) => {
+  onTaskStart: (taskId) => {
+    const task = db.tasks[taskId];
+    if (!task || !['dispatched', 'working'].includes(task.status)) return false;
+    if (task.status === 'working') return true;
+    const result = workflow.transition(task, 'start');
+    db.tasks[taskId] = result.task;
+    taskEvent(result.task);
+    save();
+    return true;
+  },
+  onTaskReport: (taskId, text, evidence = {}) => {
     const task = db.tasks[taskId];
     if (!task) return;
-    const r = workflow.transition(task, 'report', { text, by: 'engine' });
+    const r = workflow.transition(task, 'report', { text, by: 'engine', ...evidence });
     if (!r.ok) return console.log(`[engine] task ${taskId} report 拒绝：${r.reason}`);
     db.tasks[taskId] = r.task;
     deliverReport(r.task);
   },
-  onTaskFail: (taskId, reason) => {
+  onTaskFail: (taskId, reason, evidence = {}) => {
     const task = db.tasks[taskId];
     if (!task) return;
     const r = workflow.transition(task, 'fail', { reason });
     if (!r.ok) return;
+    if (evidence.provenance) r.task.provenance = evidence.provenance;
+    if (evidence.analysisRuns) r.task.analysisRuns = evidence.analysisRuns;
     db.tasks[taskId] = r.task;
     const m = missionOf(r.task);
     if (m) {
@@ -731,7 +838,8 @@ const engine = makeEngine({
       return;
     }
     const target = db.agents[targetName];
-    if (!target || target.kind !== 'agent' || !hasAdapter(target)) {
+    if (!target || target.kind !== 'agent' || !hasAdapter(target) ||
+        !channelOf(job.channel)?.members.includes(targetName)) {
       sysMsg(job.channel, `${job.agentName} 想把活转给 ${targetName}，但对方不是可执行的 agent，已忽略`);
       return;
     }
@@ -822,6 +930,7 @@ async function route(req, res) {
           if (body.adapter && kind === 'agent') existing.adapter = normalizeAdapter(body.adapter);
           if (Array.isArray(body.domains)) existing.domains = filterDomains(body.domains);
           touchPresence(name);
+          save();
           return json(res, 200, { token: existing.token, me: pubAgent(existing) });
         }
         return json(res, 409, { error: `「${name}」已被占用。如果是本人/本 agent，请带 token 重登` });
@@ -869,7 +978,7 @@ async function route(req, res) {
         me: pubAgent(me),
         agents: Object.values(db.agents).map(pubAgent),
         channels: listChannelsFor(me.name),
-        missions: Object.values(db.missions).map(pubMission),
+        missions: Object.values(db.missions).filter(m => canReadMission(me.name, m)).map(m => pubMission(m, me.name)),
         domains: scanDomains().map(({ name, version, description, skills, kbCount }) => ({ name, version, description, skills, kbCount })),
         backends: listBackends(),
         seq: db.seq,
@@ -946,6 +1055,7 @@ async function route(req, res) {
       ch = channelOf(body.channel);
       if (!ch) return json(res, 404, { error: '频道不存在' });
       if (ch.type === 'dm' && !ch.members.includes(me.name)) return json(res, 403, { error: '不在该私聊中' });
+      if (!canReadChannel(me.name, ch)) return json(res, 403, { error: '非频道成员，无法发送消息' });
       const text = String(body.text || '').trim();
       if (!text) return json(res, 400, { error: '消息不能为空' });
       if (text.length > 4000) return json(res, 400, { error: '消息过长（>4000）' });
@@ -970,17 +1080,18 @@ async function route(req, res) {
       ch = channelOf(u.searchParams.get('channel'));
       if (!ch) return json(res, 404, { error: '频道不存在' });
       if (ch.type === 'dm' && !ch.members.includes(me.name)) return json(res, 403, { error: '不在该私聊中' });
-      if (ch.type === 'group' && !(ch.isPublic || ch.members.includes(me.name))) return json(res, 403, { error: '邀请制群聊，仅成员可读' });
+      if (!canReadChannel(me.name, ch)) return json(res, 403, { error: '非频道成员' });
       const before = Number(u.searchParams.get('before')) || Infinity;
       const limit = Math.min(Number(u.searchParams.get('limit')) || 50, 200);
       let list = db.messages.filter((m) => m.channel === ch.id && m.seq < before);
       if (me.kind === 'agent' && ch.type === 'group' && (me.context || 'mentions') !== 'channel') {
         list = list.filter((m) => routing.canReadMessage(me, m, ch));
       }
-      return json(res, 200, { messages: list.slice(-limit), channel: pubChannel(ch, me.name) });
+      return json(res, 200, { messages: list.slice(-limit).map(m => messageFor(me.name, m)), channel: pubChannel(ch, me.name) });
     }
 
     if (p === '/api/typing' && method === 'POST') {
+      if (!canReadChannel(me.name, channelOf(body.channel))) return json(res, 403, { error: '非频道成员' });
       pushEvent({ type: 'typing', channel: body.channel, from: me.name });
       return json(res, 200, { ok: true });
     }
@@ -996,7 +1107,7 @@ async function route(req, res) {
       }
       const ch2 = channelOf(channelId);
       if (!ch2 || ch2.type !== 'group') return json(res, 400, { error: 'channel 不存在或不是群聊' });
-      if (!ch2.isPublic && !ch2.members.includes(me.name)) joinChannel(ch2, me.name);
+      if (!canReadChannel(me.name, ch2)) return json(res, 403, { error: '非课题群成员' });
       const id = newId('m');
       const mission = {
         id, title, brief: String(body.brief || '').slice(0, 2000) || null,
@@ -1010,11 +1121,11 @@ async function route(req, res) {
       });
       pushEvent({ type: 'mission', mission: pubMission(mission), channel: ch2.id, leader: me.name });
       save();
-      return json(res, 200, { mission: pubMission(mission) });
+      return json(res, 200, { mission: pubMission(mission, me.name) });
     }
 
     if (p === '/api/missions' && method === 'GET') {
-      return json(res, 200, { missions: Object.values(db.missions).map(pubMission) });
+      return json(res, 200, { missions: Object.values(db.missions).filter(m => canReadMission(me.name, m)).map(m => pubMission(m, me.name)) });
     }
 
     let mM = p.match(/^\/api\/missions\/([^/]+)$/);
@@ -1022,8 +1133,8 @@ async function route(req, res) {
       const m = db.missions[decodeURIComponent(mM[1])];
       if (!m) return json(res, 404, { error: '课题不存在' });
       const c = channelOf(m.channel);
-      if (!(c.isPublic || c.members.includes(me.name))) return json(res, 403, { error: '非课题群成员' });
-      return json(res, 200, { mission: pubMission(m) });
+      if (!canReadMission(me.name, m)) return json(res, 403, { error: '非课题群成员' });
+      return json(res, 200, { mission: pubMission(m, me.name) });
     }
 
     let mMT = p.match(/^\/api\/missions\/([^/]+)\/tasks$/);
@@ -1031,8 +1142,8 @@ async function route(req, res) {
       const m = db.missions[decodeURIComponent(mMT[1])];
       if (!m) return json(res, 404, { error: '课题不存在' });
       const r = createTask(m, me.name, { assignee: body.assignee, title: body.title, brief: body.brief, skills: body.skills });
-      if (!r.ok) return json(res, 403, { error: r.reason });
-      return json(res, 200, { task: pubTask(r.task, { withReport: false }) });
+      if (!r.ok) return json(res, r.code || 403, { error: r.reason });
+      return json(res, 200, { task: pubTask(r.task, { forName: me.name }) });
     }
 
     let mMS = p.match(/^\/api\/missions\/([^/]+)\/summarize$/);
@@ -1040,10 +1151,20 @@ async function route(req, res) {
       const m = db.missions[decodeURIComponent(mMS[1])];
       if (!m) return json(res, 404, { error: '课题不存在' });
       if (m.leader !== me.name) return json(res, 403, { error: `只有课题领导（${m.leader}）可以汇总` });
+      if (m.status !== 'open') return json(res, 400, { error: '课题已结题，不能继续汇总' });
       const text = String(body.text || '').slice(0, 8000);
       if (!text.trim()) return json(res, 400, { error: '汇总正文不能为空' });
-      addMessage(m.channel, me.name, text, { missionId: m.id }); // 领导署名的正式汇总消息
-      const next = [].concat(body.nextRound || []);
+      const nextInputs = body.nextRound ?? [];
+      if (!Array.isArray(nextInputs) || nextInputs.length > 50 || (body.close && nextInputs.length)) {
+        return json(res, 400, { error: 'nextRound 须为不超过50项的数组，且不能同时结题与派发下一轮' });
+      }
+      const next = nextInputs.map(normalizeTaskInput);
+      for (const task of next) {
+        if (!task) return json(res, 400, { error: '任务 assignee/title/brief/skills 格式无效' });
+        const guard = workflow.canCreateTask(m, me.name, db.agents[task.assignee]);
+        if (!guard.ok) return json(res, 400, { error: guard.reason });
+      }
+      addMessage(m.channel, me.name, text, { missionId: m.id }); // 整批校验通过之后才执行副作用
       if (next.length) {
         m.round += 1;
         sysMsg(m.channel, `进入第 ${m.round} 轮：${next.length} 个新任务已派发`);
@@ -1057,16 +1178,16 @@ async function route(req, res) {
       }
       pushEvent({ type: 'mission', mission: pubMission(m), channel: m.channel, leader: m.leader });
       save();
-      return json(res, 200, { mission: pubMission(m) });
+      return json(res, 200, { mission: pubMission(m, me.name) });
     }
 
     /* ---- 工作流：任务 ---- */
     if (p === '/api/tasks' && method === 'GET') {
       const mine = u.searchParams.get('mine');
-      let tasks = Object.values(db.tasks);
+      let tasks = Object.values(db.tasks).filter(t => canReadTask(me.name, t));
       if (mine) tasks = tasks.filter((t) => t.owner === me.name || t.assignee === me.name ||
         db.missions[t.missionId]?.leader === me.name);
-      return json(res, 200, { tasks: tasks.map((t) => pubTask(t)) });
+      return json(res, 200, { tasks: tasks.map((t) => pubTask(t, { forName: me.name })) });
     }
 
     let mTR = p.match(/^\/api\/tasks\/([^/]+)\/report$/);
@@ -1079,7 +1200,7 @@ async function route(req, res) {
       if (!r.ok) return json(res, 400, { error: r.reason });
       db.tasks[t.id] = r.task;
       deliverReport(r.task);
-      return json(res, 200, { task: pubTask(r.task) });
+      return json(res, 200, { task: pubTask(r.task, { forName: me.name }) });
     }
 
     let mTV = p.match(/^\/api\/tasks\/([^/]+)\/review$/);
@@ -1092,18 +1213,15 @@ async function route(req, res) {
       if (!r.ok) return json(res, 400, { error: r.reason });
       db.tasks[t.id] = r.task;
       afterReview(r.task);
-      return json(res, 200, { task: pubTask(db.tasks[t.id]) });
+      return json(res, 200, { task: pubTask(db.tasks[t.id], { forName: me.name }) });
     }
 
     let mT1 = p.match(/^\/api\/tasks\/([^/]+)$/);
     if (mT1 && method === 'GET') {
       const t = db.tasks[decodeURIComponent(mT1[1])];
       if (!t) return json(res, 404, { error: '任务不存在' });
-      const m = missionOf(t);
-      const c = m ? channelOf(m.channel) : null;
-      const involved = t.owner === me.name || t.assignee === me.name || m?.leader === me.name;
-      if (!involved && !(c && (c.isPublic || c.members.includes(me.name)))) return json(res, 403, { error: '与该任务无关' });
-      return json(res, 200, { task: pubTask(t, { withReport: involved || (c && c.isPublic) }) });
+      if (!canReadTask(me.name, t)) return json(res, 403, { error: '与该任务无关' });
+      return json(res, 200, { task: pubTask(t, { withReport: true, forName: me.name }) });
     }
 
     /* ---- 回执 ---- */
@@ -1168,7 +1286,7 @@ async function route(req, res) {
             .map((m) => ({ type: 'message', message: m, seq: m.seq }));
           if (missed.length) {
             markDelivered(missed);
-            return json(res, 200, { events: missed, cursor: db.seq, backfill: true });
+            return json(res, 200, { events: missed.map(e => eventFor(me.name, e)), cursor: db.seq, backfill: true });
           }
           return json(res, 200, { events: [], cursor: db.seq, reset: true });
         }
@@ -1176,7 +1294,7 @@ async function route(req, res) {
         if (evts.length) {
           since = evts[evts.length - 1].seq;
           markDelivered(evts);
-          return json(res, 200, { events: evts, cursor: since });
+          return json(res, 200, { events: evts.map(e => eventFor(me.name, e)), cursor: since });
         }
         if (db.seq < since) return json(res, 200, { events: [], cursor: db.seq, reset: true });
         if (Date.now() >= deadline || !waitMs) return json(res, 200, { events: [], cursor: Math.max(since, 0) });
@@ -1202,7 +1320,7 @@ async function route(req, res) {
       const lastId = Number(req.headers['last-event-id']) || Number(u.searchParams.get('since')) || 0;
       for (const e of db.events) {
         if (e.seq > lastId && visibleTo(me.name, e)) {
-          res.write(`id: ${e.seq}\ndata: ${JSON.stringify(e)}\n\n`);
+          res.write(`id: ${e.seq}\ndata: ${JSON.stringify(eventFor(me.name, e))}\n\n`);
         }
       }
       const ping = setInterval(() => res.write(':ping\n\n'), 15000);
@@ -1255,7 +1373,7 @@ function pubChannel(ch, forName) {
 
 function listChannelsFor(name) {
   return Object.values(db.channels)
-    .filter((c) => c.type === 'dm' ? c.members.includes(name) : (c.isPublic || c.members.includes(name)))
+    .filter((c) => canReadChannel(name, c))
     .map((c) => pubChannel(c, name));
 }
 

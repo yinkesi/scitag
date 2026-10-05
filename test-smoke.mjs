@@ -12,10 +12,11 @@
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
-const TMP = path.join(process.env.TEMP || 'D:/tmp', 'scitag-smoke-' + Date.now());
+const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'scitag-smoke-'));
 const PORT = 8200 + Math.floor(Math.random() * 600);
 const BASE = `http://127.0.0.1:${PORT}`;
 
@@ -61,7 +62,6 @@ async function waitHealth() {
 }
 
 /* ---------- 准备副本 ---------- */
-fs.rmSync(TMP, { recursive: true, force: true });
 fs.cpSync(ROOT, TMP, {
   recursive: true,
   filter: (src) => {
@@ -171,7 +171,7 @@ let missionId, taskA;
     token: prof,
     body: { assignee: '小王', title: '解释 compliance 随加载角的放大机理', brief: '按研究任务口径 T2：分组统计 compliance 角度趋势并给机理归因。', skills: ['scaffold-explain'] },
   });
-  ok(rTask.status === 200 && rTask.json.task.status === 'dispatched', '教授派活给小王（带技能）');
+  ok(rTask.status === 200 && ['dispatched', 'working'].includes(rTask.json.task.status), '教授派活给小王（带技能）');
   taskA = rTask.json.task.id;
 
   const reported = await poll(async () => {

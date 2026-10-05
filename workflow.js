@@ -63,6 +63,7 @@ export function newTask({ id, missionId, assignee, owner, title, brief, maxAttem
     id, missionId, assignee, owner,
     title: String(title || '未命名任务').slice(0, 120),
     brief: String(brief || '').slice(0, 4000),
+    initialBrief: String(brief || '').slice(0, 4000),
     status: 'dispatched',
     report: null,          // agent 最近一次提交的成果全文（≤20k）
     review: null,          // { decision, comment, by, at } 最近一次审批
@@ -91,6 +92,10 @@ export function transition(task, action, payload = {}) {
     const next = { ...task, status: payload.decision === 'approve' ? 'approved' : 'rejected',
       review: { decision: payload.decision, comment: String(payload.comment || '').slice(0, 2000), by: payload.by || null, at: Date.now() },
       updatedAt: Date.now() };
+    const versions = task.reportVersions?.length ? task.reportVersions :
+      [{ attempt: task.attempts, report: task.report, provenance: task.provenance || null, at: task.updatedAt }];
+    next.reportVersions = versions.map((version, index) => index === versions.length - 1
+      ? { ...version, review: next.review } : version);
     pushHistory(next, task.status, next.status, `review:${payload.decision}`);
     return { ok: true, task: next, event: 'review' };
   }
@@ -100,7 +105,12 @@ export function transition(task, action, payload = {}) {
     }
     const text = String(payload.text || '').slice(0, 20000);
     if (!text.trim()) return { ok: false, task, event: null, reason: '成果正文不能为空' };
-    const next = { ...task, status: 'reported', report: text, updatedAt: Date.now() };
+    const at = Date.now();
+    const provenance = payload.provenance || null;
+    const analysisRuns = payload.analysisRuns || (provenance ? [{ ok: true, text, provenance }] : []);
+    const next = { ...task, status: 'reported', report: text, provenance, analysisRuns, updatedAt: at,
+      reportVersions: [...(task.reportVersions || []), { attempt: task.attempts, report: text, provenance,
+        analysisRuns, review: null, at }] };
     pushHistory(next, task.status, 'reported', `report by ${payload.by || '?'}`);
     return { ok: true, task: next, event: 'report' };
   }
@@ -114,6 +124,7 @@ export function transition(task, action, payload = {}) {
       return { ok: true, task: next, event: 'fail' };
     }
     const next = { ...task, status: 'dispatched', attempts: task.attempts + 1,
+      report: null, provenance: null, analysisRuns: [],
       // 驳回意见并进任务书，agent 重做时带着主人的话
       brief: task.brief + `\n\n【主人第 ${task.attempts} 轮审阅意见】${task.review?.comment || '（未填）'}`,
       updatedAt: Date.now() };

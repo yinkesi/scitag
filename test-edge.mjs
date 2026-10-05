@@ -7,10 +7,11 @@
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
-const TMP = path.join(process.env.TEMP || 'D:/tmp', 'scitag-edge-' + Date.now());
+const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'scitag-edge-'));
 const PORT = 8800 + Math.floor(Math.random() * 150);
 const BASE = `http://127.0.0.1:${PORT}`;
 
@@ -29,7 +30,6 @@ async function poll(fn, ms = 6000) {
   for (;;) { if (await fn()) return true; if (Date.now() - t0 > ms) return false; await new Promise((r) => setTimeout(r, 150)); }
 }
 
-fs.rmSync(TMP, { recursive: true, force: true });
 fs.cpSync(ROOT, TMP, {
   recursive: true,
   filter: (src) => {
@@ -61,7 +61,7 @@ const prof = 'demo-jiaoshou';
   const badSkill = await api('POST', `/api/missions/${m.id}/tasks`, { token: prof, body: { assignee: '小王', title: 'B', brief: 'y', skills: ['不存在的技能'] } });
   ok(badSkill.status === 200, '点名未知技能不炸（注入时自然落空）');
   await poll(async () => (await api('GET', `/api/tasks/${badSkill.json.task.id}`, { token: prof })).json.task.status === 'reported');
-  const repB = (await api('GET', `/api/tasks/${badSkill.json.task.id}`, { token: prof })).json.task.report;
+  const repB = (await api('GET', `/api/tasks/${badSkill.json.task.id}`, { token: 'demo-wangyan' })).json.task.report;
   ok(repB.replace(/\*/g, '').includes('使用外挂技能：无'), '未知技能时上下文注入为空而非报错');
   ok((await api('POST', '/api/register', { body: { name: 'x'.repeat(25) } })).status === 400, '超长名字 → 400');
   ok((await api('POST', '/api/register', { body: { name: 'a b' } })).status === 400, '名字带空格 → 400');
@@ -101,7 +101,7 @@ const prof = 'demo-jiaoshou';
   ok(rExt.status === 200, '注册外部 agent 小外2');
   const t5 = (await api('POST', `/api/missions/${m.id}/tasks`, { token: prof, body: { assignee: '小外2', title: 'E', brief: 'x' } })).json.task;
   const bigReport = await api('POST', `/api/tasks/${t5.id}/report`, { token: rExt.json.token, body: { text: 'x'.repeat(30000) } });
-  const saved = (await api('GET', `/api/tasks/${t5.id}`, { token: prof })).json.task;
+  const saved = (await api('GET', `/api/tasks/${t5.id}`, { token: 'demo-wangyan' })).json.task;
   ok(bigReport.status === 200 && saved.report?.length === 20000, '外部交卷 30k → 截到 20k 上限');
 }
 

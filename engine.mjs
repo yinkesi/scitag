@@ -30,11 +30,11 @@ export function makeEngine(deps) {
   // }
   const busy = new Set(); // agentName -> 正在执行（内存态，重启即清）
 
-  function enqueue({ kind, agentName, taskId = null, channel, text, from, skillTags = [], depth = 0 }) {
+  function enqueue({ kind, agentName, taskId = null, channel, channelName, taskTitle, text, from, skillTags = [], depth = 0 }) {
     const job = {
       id: 'j_' + Math.random().toString(36).slice(2, 9),
       kind, agentName, taskId, channel, text: String(text || '').slice(0, 6000),
-      from, skillTags, depth,
+      from, skillTags, depth, channelName, taskTitle,
       status: 'queued', createdAt: Date.now(),
     };
     deps.jobs.push(job);
@@ -63,24 +63,27 @@ export function makeEngine(deps) {
     }
     job.status = 'working';
     job.startedAt = Date.now();
-    job.context = deps.buildContext(job.agentName, job.text, job.skillTags);
     busy.add(job.agentName);
-    deps.save();
+    let res;
+    try {
+      if (job.kind === 'task' && deps.onTaskStart?.(job.taskId) === false) {
+        job.status = 'done'; // A recovered job whose task already completed must not execute again.
+        return;
+      }
+      job.context = deps.buildContext(job.agentName, job.text, job.skillTags);
+      deps.save();
+      try {
+        res = await adapter.exec(toExecJob(job, agent), agent.adapter.options || {});
+        if (!res || typeof res.ok !== 'boolean') throw new Error('执行后端返回格式无效');
+        if (res.ok && !String(res.text || '').trim()) throw new Error('执行后端返回空成果');
+      } catch (error) { res = { ok: false, text: String(error?.message || error) }; }
 
-    const res = await adapter.exec(toExecJob(job, agent), agent.adapter.options || {});
-
-    job.status = res.ok ? 'done' : 'failed';
-    job.finishedAt = Date.now();
-    job.error = res.ok ? undefined : String(res.text || '').slice(0, 300);
-    delete job.context; // 注入上下文（技能全文+KB）只活在执行期，完结即弃——防 db.json 无限膨胀
-    busy.delete(job.agentName);
-    prune();
-    deps.save();
-
-    if (job.kind === 'task') {
-      if (res.ok) deps.onTaskReport(job.taskId, res.text);
-      else deps.onTaskFail(job.taskId, String(res.text || '执行失败'));
-    } else if (res.ok) {
+      job.status = res.ok ? 'done' : 'failed';
+      job.error = res.ok ? undefined : String(res.text || '').slice(0, 300);
+      if (job.kind === 'task') {
+        if (res.ok) deps.onTaskReport(job.taskId, res.text, { provenance: res.provenance, analysisRuns: res.analysisRuns });
+        else deps.onTaskFail(job.taskId, String(res.text || '执行失败'), { provenance: res.provenance, analysisRuns: res.analysisRuns });
+      } else if (res.ok) {
       const { cleanText, directives } = parseDirectives(res.text);
       if (cleanText) deps.onChatReply(job, cleanText);
       for (const d of directives) {
@@ -91,14 +94,27 @@ export function makeEngine(deps) {
         }
         deps.onHandoff(job, d.title, d.detail);
       }
+      }
+    } catch (error) {
+      job.status = 'failed';
+      job.error = String(error?.message || error).slice(0, 300);
+      try { if (job.kind === 'task') deps.onTaskFail(job.taskId, job.error); }
+      catch (callbackError) { console.error('[engine:callback]', callbackError.message); }
+    } finally {
+      job.finishedAt = Date.now();
+      delete job.context;
+      busy.delete(job.agentName);
+      prune();
+      deps.save();
+      pump();
     }
-    pump(); // 让同 agent 的下一个排队 job 立即接上
   }
 
   function toExecJob(job, agent) {
     return {
       kind: job.kind, agentName: agent.name, persona: agent.persona,
       ownerName: agent.owner || null,
+      domains: agent.domains || [],
       channelName: job.channelName || job.channel,
       from: job.from, text: job.text,
       taskId: job.taskId,
