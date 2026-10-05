@@ -137,7 +137,12 @@ def cmd_fit(rows, by=None):
     label = "M4 log(c)~1+vf+ang（指数趋势）"
     X = [MODELS["M1 线性 c~1+vf+ang"](d) for d in rows]
     beta, r2, rmse = lstsq(X, ly)
-    print(f"{label}\n  R²={r2:.5f}（log 域）\n  c ≈ exp({fmt_coef(['1','vf','ang'], beta)})")
+    yhat = [math.exp(sum(b * v for b, v in zip(beta, row))) for row in X]
+    residual = sum((yy - hh) ** 2 for yy, hh in zip(y, yhat))
+    total = sum((yy - sum(y) / len(y)) ** 2 for yy in y)
+    raw_r2 = 1 - residual / total if total else float("nan")
+    raw_rmse = (residual / len(y)) ** 0.5
+    print(f"{label}\n  R²={r2:.5f}（log 域，不可跨尺度直接比较）\n  原尺度 R²={raw_r2:.5f}  RMSE={raw_rmse:.3g}\n  c ≈ exp({fmt_coef(['1','vf','ang'], beta)})")
     print(f"\n最简充分模型建议：见上表按「R² 提升 <2% 不加项」取舍；适用域 Vf∈[0.25,0.65]、θ∈[0°,45°]（数据凸包）")
 
 
@@ -148,10 +153,9 @@ def cmd_inverse(rows, target):
         print(f"目标 {target:.3g} 低于数据域最小 compliance {lo:.3g}：数据域内无解（外推需补仿真，拒绝硬给）。")
         return
     feas = [r for r in rows if r["comp"] <= target]
-    if not feas:
-        print(f"目标 {target:.3g} 高于数据域最大值 {hi:.3g}：全部 100 行都满足（约束无意义，请收紧）。")
-        return
-    print(f"目标：compliance ≤ {target:.3g}；可行 {len(feas)}/100 行")
+    if target >= hi:
+        print(f"目标 {target:.3g} 不低于数据域最大值 {hi:.3g}：全部样本满足上限，可收紧约束。")
+    print(f"目标：compliance ≤ {target:.3g}；可行 {len(feas)}/{len(rows)} 行")
     by_vf = {}
     by_ang = {}
     for r in feas:

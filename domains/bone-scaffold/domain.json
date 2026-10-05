@@ -2,6 +2,13 @@
   "name": "bone-scaffold",
   "version": "1.0.0",
   "description": "钛合金骨支架多目标拓扑优化研究（刚度 vs 渗透率）：COMSOL 仿真数据集 + 条件 β-VAE 生成管线",
+  "searchAliases": {
+    "刚度": ["compliance", "柔度"],
+    "柔度": ["compliance"],
+    "角度": ["加载角", "theta"],
+    "渗透率": ["permeability"],
+    "孔隙率": ["Vf", "体积分数"]
+  },
   "data": {
     "xlsx": "data/BONE_SCAFFOLD.xlsx",
     "images": "data/images/",
