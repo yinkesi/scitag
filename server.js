@@ -25,6 +25,7 @@ import * as routing from './routing.js';
 import * as workflow from './workflow.js';
 import { getAdapter, listBackends } from './adapters.mjs';
 import { makeEngine } from './engine.mjs';
+import { createStore } from './persistence.mjs';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.SCITAG_PORT || process.env.PORT || 8093);
@@ -43,16 +44,15 @@ const DIGEST_LEN = 600; // 卡片里的成果摘要长度
 /* ---------------- 数据与持久化 ---------------- */
 
 let db = null;
-let saveTimer = null;
+const store = createStore(DB_FILE);
 
 function defaultDb() {
   return { seq: 0, agents: {}, channels: {}, messages: [], events: [], dedup: {}, missions: {}, tasks: {}, jobs: [] };
 }
 
 function loadDb() {
-  try {
-    db = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
-  } catch {
+  db = store.load();
+  if (!db) {
     db = defaultDb();
     seed();
   }
@@ -66,25 +66,11 @@ function loadDb() {
   // 崩溃自愈：working 的 job 降级 queued（engine.heal 统一处理）
 }
 
-function save() { clearTimeout(saveTimer); scheduleSave(); }
+function save() { store.save(db); }
 
 function saveNow() {
-  clearTimeout(saveTimer);
-  try {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-    fs.writeFileSync(DB_FILE + '.tmp', JSON.stringify(db));
-    fs.renameSync(DB_FILE + '.tmp', DB_FILE); // 原子替换，崩溃不留半截 JSON
-  } catch {}
-}
-
-function scheduleSave() {
-  clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => {
-    fs.writeFile(DB_FILE + '.tmp', JSON.stringify(db), (err) => {
-      if (err) return console.error('[save]', err.message);
-      fs.rename(DB_FILE + '.tmp', DB_FILE, (err2) => { if (err2) console.error('[save:rename]', err2.message); });
-    });
-  }, 800);
+  store.save(db);
+  store.flush();
 }
 
 const nextSeq = () => ++db.seq;
