@@ -266,3 +266,36 @@ domains/<pkg>/
 - 不做语义向量检索（KB 检索用标题加权词频，语义检索列 roadmap）。
 - 不做多服务器/横向扩展（单机 JSON 持久化是刻意选择，演示场景最优）。
 - 不接官方微信（agent-tag 时期已澄清：项目自身界面即微信形态）。
+
+## 14. 可靠性与真实科研执行更新（2026-10-05）
+
+本节覆盖上文 v1 方案中已调整的权限、执行、持久化与测试契约，历史设计保留供对照。
+
+- `canReadChannel` / `canReadMission` / `canReadTask` / `canReadReport` 统一裁决 REST、SSE、长轮询和消息卡片。
+  未审批正文、摘要、来源仅 owner / assignee 可读；leader 和群研究者看到状态；published 后开放当前报告，
+  无关 agent 不因 `context:channel` 获得报告读取权。重做旧稿、失败详细输出和驳回意见仅当事人可读。
+  `/api/state`、课题/任务列表按调用者过滤，私有群禁止通过发消息或建课题自动入群。
+- 派发接口校验 assignee/title/brief/skills 形状，summarize 的 nextRound（≤50项）先整批规范化、检查，
+  再写汇总和任务。closed 不可继续汇总；close 与 nextRound 不能同时使用。
+- engine 新增 `onTaskStart`；working 与 task 同步，异常转 failed、释放 busy 并续跑。
+  已结束 task 的残留 job 在恢复时不重复执行。执行中崩溃恢复仍属于至少一次执行语义，可能重跑计算。
+- `persistence.mjs` 是单写入点；最多800ms合并写，原子替换并保留上一有效 `.bak`。
+  ENOENT 才播种演示；损坏文件先存 `.corrupt-*` 再恢复有效备份，无有效备份明确拒绝启动。
+- `research.mjs` 的白名单为 bone-scaffold 的 stats/fit/inverse。对脚本和xlsx创建不可变临时快照，
+  用 argv 调 Python、不经 shell；60s 超时、输出256KiB上限、支持取消。保存来源和完整原始输出，
+  非零退出为失败；Python可执行路径由 `SCITAG_PYTHON` 指定，客户端不能指定命令或路径。
+- `analysis` adapter 可无LLM直接计算。`llm` adapter 为已挂载域开放 `analyze_scaffold`，
+  最多四次模型请求，每轮最多四个调用，逐项验证工具名称、挂载域与参数，保留全部实际分析记录。
+  `enableTools:false` 支持不接受工具请求的兼容接口；工具结果仍需owner核验，不把模型解释当作计算事实。
+- `GET /api/tasks/:id` 为允许读正文者返回 `provenance`、`analysisRuns`；仅owner/assignee返回 `reportVersions`、
+  `failReason`。provenance包含 domain/command/args/at/dataSha256/scriptSha256/exitCode/stdout/stderr/output。
+  每个 reportVersion 包含 attempt/report/provenance/analysisRuns/review/at，重做保留旧版本。
+  外部report接口只能交正文，不能伪造平台验证过的来源；旧数据在下一次审阅时补上已有报告的版本记录。
+- 中文KB检索使用分词、域包 searchAliases、标题加权，返回实际命中段落和source路径，仍不使用向量数据库。
+  逆设计的上限约束高于全表最大值时返回全部可行；拟合把log域与原尺度指标分开报告。
+- 网页接入表单支持analysis步骤/目标、LLM地址/模型/密钥/工具开关、webhook地址。
+  成果弹窗新增核验记录、全部分析（含单次失败）与历史审阅。保留既有布局和配色。
+
+检查入口 `npm test` 顺序运行语法检查、46冒烟、20边界、25模块与工具测试、119权限/工作流/真实分析回归。
+完整检查依赖Python/openpyxl；`npm run test:core` 不要求Python。所有集成服务运行于临时副本，
+GitHub Actions声明Ubuntu/Windows、Node18/24、Python3.12矩阵；远端是否通过以实际Actions结果为准。

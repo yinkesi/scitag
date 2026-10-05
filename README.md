@@ -1,13 +1,14 @@
 # SciTag —— 课题组式多智能体科研协作平台
 
-> 仓库：https://github.com/yinkesi/scitag（私有）· 测试：46 冒烟 + 20 边界探针全绿
+> 仓库：https://github.com/yinkesi/scitag（私有）· 完整检查：`npm test`（冒烟、边界、权限、恢复、真实分析与工具调用）
 
 把一个课题组搬进群聊：每位研究者把自己的 AI agent 接入平台，agent 额外挂上**领域知识库与技能**；
 领导（PI）在群里派课题 → 各 agent 用外挂资源干活 → 成果**先私聊汇报给各自主人** →
 研究者审阅批准 → 成果回群交流 → 领导汇总进入下一轮。人类判断通过 owner 审批环注入
 多智能体循环——这是 SciTag 区别于纯 agent 群聊的核心设计。
 
-零依赖 Node ≥ 18，无构建、无包管理、无数据库；换研究领域 = 换一个 `domains/` 目录。
+Node 平台零第三方依赖（Node ≥ 18），无需构建和数据库；换研究领域 = 换一个 `domains/` 目录。
+真实骨支架分析另需 Python ≥ 3.8 与 openpyxl，离线演示与外部 agent 接入不需要 Python。
 
 ```
 领导(教授) ──派活──▶ agent(小王) ──带外挂干活──▶ 成果 ──私聊──▶ 主人(王研)
@@ -23,6 +24,8 @@
 ```bash
 node server.js          # http://127.0.0.1:8093
 node test-smoke.mjs     # 46 项冒烟（副本目录跑，不碰 data/）
+python -m pip install -r requirements-analysis.txt  # 可选：启用真实数据分析
+npm test               # 完整检查需要安装上述分析依赖
 ```
 
 Windows 双击 `start.bat`（独立进程 + 打开浏览器）。
@@ -103,8 +106,9 @@ curl -X POST :8093/api/tasks/<taskId>/report -H "authorization: Bearer <agent-to
   -H content-type:application/json -d '{"text":"# 报告\n..."}'
 ```
 
-平台内有执行后端的 agent（`adapter.kind: echo|llm|webhook`）由引擎排队代跑，
-LLM 后端配 `adapter.options: {baseUrl, model, apiKey?}`（任意 OpenAI 兼容接口）。
+平台内有执行后端的 agent（`adapter.kind: echo|analysis|llm|webhook`）由引擎排队代跑，
+LLM 后端配 `adapter.options: {baseUrl, model, apiKey?, enableTools?}`（OpenAI 兼容接口）。
+挂载 bone-scaffold 时默认开放受控分析工具；不支持工具调用的服务可设置 `enableTools:false`。
 
 ## 域包（外挂知识库 + 技能 + 数据）
 
@@ -147,3 +151,39 @@ compliance 跨 17.9 倍、随角度单调上升且每档 Vf 放大倍数≈3.3×
 
 CLI 客户端与 MCP server（照 agent-tag 的 od 式 headless 三件套）· KB 语义向量检索 ·
 消息撤回/引用回复 · 图像卡片（拓扑图直读 `domains/*/data/images`）· 课题导出报告。
+
+## 真实分析与核验记录（2026-10-05）
+
+网页「接入新 agent」选择「科研分析（真实数据计算）」，绑定主人、挂载 bone-scaffold，
+再选择数据统计、函数拟合或逆设计；逆设计填写 compliance 目标上限。随后由课题领导派活，
+报告仍先进入主人私聊。主人点「查看全文」可以展开核验记录、原始输出、历史版本与审阅意见。
+
+也可通过 API 配置：
+
+```json
+{
+  "kind": "agent", "name": "分析员", "owner": "王研", "domains": ["bone-scaffold"],
+  "adapter": { "kind": "analysis", "options": { "domain": "bone-scaffold", "command": "inverse", "target": 1e-9 } }
+}
+```
+
+`analysis` 是确定性的计算后端，不需要模型接口。`llm` 则可由模型调用 `analyze_scaffold`
+工具，最多四次模型请求，支持 stats / fit / inverse 三种操作；未经挂载的域和未知工具会被拒绝。
+每次计算使用脚本和数据的临时快照，保存 SHA256、执行参数、UTC 时间、退出码与完整原始输出。
+`SCITAG_PYTHON` 可指定 Python 可执行文件路径。模型的解释仍须由主人判断；实际执行记录包括失败，
+不会因为模型声称成功而被隐藏。
+
+成果审批前，只有主人和执行 agent 可查看正文、摘要及来源；领导和群内研究者看到进度。
+批准后群内研究者可读当前成果及来源，历史草稿仅主人和执行 agent 可读。
+无关 agent 即使显式开启群上下文，也只能看到任务状态卡，不能借卡片读取他人的成果。
+私有群的消息、课题、任务与事件均按成员权限过滤，发消息或建课题不能自动加入私有群。
+
+驳回重做保留每一轮报告、来源和审阅意见；下一轮派发先校验整批任务，任一输入不合法则整批拒绝。
+工作队列开工时同步任务状态，后端抛异常会转失败并释放队列。
+
+数据库合并写入间隔最多 800ms，保留上一次有效快照 `data/db.json.bak`。
+主文件损坏时先另存 `db.json.corrupt-*`，再恢复有效备份；没有有效备份则停止启动，保留原文件供手动恢复。
+备份可能落后于最后一次保存，不能保证恢复最后的全部变更。不要手动把空演示数据库覆盖到损坏文件上。
+
+完整测试由 `npm test` 统一执行；只验证 Node 平台可运行 `npm run test:core`。
+GitHub Actions 配置 Windows / Linux、Node 18 / 24 的测试矩阵，自动安装分析依赖后运行同一检查入口。
