@@ -1,6 +1,4 @@
-/* app.js —— SciTag Console 前端逻辑
-   渲染概念「实验记录台」：日志沟槽消息流 / 文档卡 / 乘组清单 / 仪器条 / 任务流水线。
-   行为契约与旧版一致（API、SSE、审批、@/# 补全），仅表现层重构。 */
+/* SciTag research workflows, presented in a desktop conversation workspace. */
 'use strict';
 
 const S = {
@@ -9,6 +7,7 @@ const S = {
   me: null, agents: [], channels: [], missions: [], domains: [], backends: [],
   cur: null, msgs: {}, seq: 0,
   es: null,
+  sidebarMode: 'talk', navigation: [], navigationIndex: -1,
 };
 
 const $ = (id) => document.getElementById(id);
@@ -37,6 +36,7 @@ async function api(path, opts = {}) {
 
 for (const li of document.querySelectorAll('#gateQuick li')) {
   li.onclick = () => doLogin(li.dataset.login, li.dataset.token);
+  li.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); li.click(); } };
 }
 $('btnLogin').onclick = () => doLogin($('loginName').value.trim(), $('loginToken').value.trim());
 async function doLogin(name, token) {
@@ -100,7 +100,7 @@ async function fetchFullTask(id) {
 function previewHtml(t) {
   return `<div class="pv-meta">${esc(t.badge)} · ${esc(t.assignee)} → ${esc(t.owner)} · R${t.attempts}</div>` +
     `<div class="pv-sec">任务书</div><div class="digest">${md(t.brief)}</div>` +
-    `<div class="pv-sec">成果全文</div><div class="digest pv-report">${md(t.report || '（尚无成果）')}</div>` +
+    `<div class="pv-sec">成果全文</div><div class="digest pv-report">${md(t.report || (t.status === 'reported' ? '成果待主人审阅，批准后开放。' : '（尚无成果）'))}</div>` +
     (t.review ? `<div class="pv-sec">最近审阅</div><div class="digest">${esc(t.review.decision)}：${md(t.review.comment || '')}</div>` : '');
 }
 
@@ -130,6 +130,7 @@ function makeExpandable(box, taskId) {
     fillPreview(pv, taskId);
   };
   title.onclick = toggle;
+  makeKeyboardClickable(title);
   ch.onclick = toggle;
 }
 
@@ -155,7 +156,7 @@ function renderStats(jobs) {
     `作业 <b>${j.working || 0}</b>`,
     `课题 <b>${S.missions.filter((m) => m.status === 'open').length}</b>`,
   ];
-  $('liveStats').innerHTML = parts.join(' · ') + ' · LENOVO';
+  $('liveStats').innerHTML = parts.join(' · ');
 }
 
 /* ---------------- 侧栏（Claude Code 式：菜单行 + Pinned 群组树 + 私聊 + 成员） ---------------- */
@@ -165,6 +166,7 @@ function chRow(c, label) {
   if (c.id === S.cur) li.classList.add('on');
   li.innerHTML = `<span class="node"></span><span class="ch-name">${esc(c.name)}</span><span class="n-members">${esc(label)}</span>`;
   li.onclick = () => openChannel(c.id);
+  makeKeyboardClickable(li);
   return li;
 }
 
@@ -175,8 +177,11 @@ function renderSidebar() {
 
   const dl = $('dmList');
   dl.innerHTML = '';
-  for (const c of S.channels.filter((x) => x.type === 'dm')) dl.appendChild(chRow(c, '私聊'));
-  dl.parentElement.style.display = S.channels.some((x) => x.type === 'dm') ? '' : 'none';
+  const query = $('chatSearch').value.trim().toLowerCase();
+  const chats = S.channels.filter(x => x.type === 'dm' && x.name.toLowerCase().includes(query));
+  for (const c of chats) dl.appendChild(chRow(c, '私聊'));
+  $('emptyChats').classList.toggle('hidden', chats.length > 0);
+  $('emptyChats').textContent = query ? '没有匹配的会话' : '选择成员，开始私聊';
 
   const rl = $('rosterList');
   rl.innerHTML = '';
@@ -191,13 +196,15 @@ function renderSidebar() {
       `<span class="m-name">${esc(a.name)}</span>` +
       `<span class="m-role"><span class="dot${a.online ? ' on' : ''}"></span> ${esc(role)}</span>`;
     li.onclick = () => openDm(a.name);
+    makeKeyboardClickable(li);
     rl.appendChild(li);
   }
 
   const role = S.me ? (S.me.kind === 'human' ? (S.me.name === '教授' ? 'PI · 课题领导' : '研究者') : 'agent') : '';
-  $('meCard').innerHTML = S.me
-    ? `<span class="avatar" style="background:hsl(${S.me.hue},20%,42%)">${esc(S.me.name[0])}</span><span><div class="me-name">${esc(S.me.name)}</div><div class="me-role">${esc(role)}</div></span>`
-    : '';
+  $('meCard').innerHTML = S.me ? `<img class="brand-mark" src="brand.svg" alt=""><span class="account-label">${esc(S.me.name)} <span class="me-role">· SciTag</span></span>${icon('chevron')}` : '';
+  $('meCard').title = `${S.me?.name || ''} · ${role}`;
+  renderProjectTree();
+  setSidebarMode(S.sidebarMode);
 }
 
 async function openDm(name) {
@@ -208,7 +215,11 @@ async function openDm(name) {
 
 /* ---------------- 频道与消息 ---------------- */
 
-async function openChannel(id) {
+async function openChannel(id, { fromHistory = false } = {}) {
+  if (!fromHistory && S.navigation[S.navigationIndex] !== id) {
+    S.navigation = S.navigation.slice(0, S.navigationIndex + 1);
+    S.navigation.push(id); S.navigationIndex = S.navigation.length - 1;
+  }
   S.cur = id;
   const c = S.channels.find((x) => x.id === id);
   $('chatTitleTxt').textContent = c ? (c.type === 'dm' ? '与 ' + c.name : c.name) : '—';
@@ -222,6 +233,12 @@ async function openChannel(id) {
   const j = await api('/api/messages?channel=' + encodeURIComponent(id) + '&limit=100');
   S.msgs[id] = j.messages;
   renderMsgs();
+  $('msgList').scrollTop = $('msgList').scrollHeight;
+  updateNavigation();
+  renderPanel();
+  renderResources();
+  $('workspace').classList.remove('sidebar-open');
+  $('sidebarBackdrop').classList.add('hidden');
 }
 
 function nearBottom(el) { return el.scrollHeight - el.scrollTop - el.clientHeight < 80; }
@@ -259,11 +276,16 @@ function renderMsg(m) {
     div.querySelector('.body').appendChild(renderDoc(m));
     return div;
   }
-  div.className = 'msg' + (m.from === S.me.name ? ' mine' : '');
+  const mine = m.from === S.me.name;
+  div.className = 'msg' + (mine ? ' mine' : '');
   div.innerHTML =
     `<div class="body">` +
-    `<div class="meta"><b>${esc(m.from)}</b><span class="time">${time}</span></div>` +
-    `<div class="bubble">${highlight(m.text, m.mentions, m.skills)}</div></div>`;
+    (agentOf(m.from)?.kind === 'agent' ? `<div class="agent-signature"><img src="brand.svg" alt="SciTag"><span>${esc(m.from)}</span></div>` : `<div class="meta"><b>${esc(m.from)}</b><span class="time">${time}</span></div>`) +
+    `<div class="bubble">${highlight(m.text, m.mentions, m.skills)}</div><div class="msg-actions"><span>${time}</span><button class="icon-btn copy-message" aria-label="复制消息" title="复制消息">${icon('copy')}</button></div></div>`;
+  div.querySelector('.copy-message').onclick = async () => {
+    try { await navigator.clipboard.writeText(m.text); toast('已复制消息'); }
+    catch { toast('浏览器未允许复制，请选择文字复制', true); }
+  };
   return div;
 }
 
@@ -346,6 +368,7 @@ async function review(taskId, decision, comment) {
   try {
     await api(`/api/tasks/${encodeURIComponent(taskId)}/review`, { method: 'POST', body: { decision, comment } });
     toast(decision === 'approve' ? '已批准，成果已回群' : '已驳回，agent 将重做');
+    delete fullTaskCache[taskId];
     await refreshState(); renderMsgs(); renderPanel();
   } catch (e) { toast(e.message, true); }
 }
@@ -386,26 +409,19 @@ document.querySelectorAll('.tabs button').forEach((b) => {
     renderPanel();
   };
 });
-$('btnPanel').onclick = () => $('panel').classList.remove('hidden');
+$('btnPanel').onclick = () => openProjectPanel('missions');
 
 // 分段控制：会话 / 乘组 两个视图
 for (const b of document.querySelectorAll('.seg-btn')) {
   b.onclick = () => {
-    document.querySelectorAll('.seg-btn').forEach((x) => x.classList.toggle('on', x === b));
-    const talk = b.dataset.seg === 'talk';
-    document.querySelectorAll('.side-sec').forEach((sec, i) => {
-      if (i < 2) sec.style.display = talk ? '' : 'none';   // Pinned 群组 + 私聊
-      else sec.style.display = talk ? 'none' : '';          // 成员
-    });
+    setSidebarMode(b.dataset.seg);
   };
 }
-$('btnClosePanel').onclick = () => $('panel').classList.add('hidden');
+$('btnClosePanel').onclick = () => setPanelOpen(false);
 
 /** 侧栏「域包」菜单 / 撰写条右下的域包▾：打开任务板并切到域包页 */
 function openDomainsTab() {
-  $('panel').classList.remove('hidden');
-  const b = [...document.querySelectorAll('.tabs button')].find((x) => x.dataset.tab === 'domains');
-  if (b) b.click();
+  openProjectPanel('domains');
 }
 $('btnDomains').onclick = openDomainsTab;
 $('tbDomain').onclick = openDomainsTab;
@@ -431,8 +447,8 @@ $('scrollDown').onclick = () => { msgListEl.scrollTop = msgListEl.scrollHeight; 
 /** Progress 步骤清单（Claude Code 的 ✓✓③○）：开放课题的任务按状态出步骤行 */
 function renderMissionSteps() {
   const box = $('missionSteps');
-  const open = S.missions.filter((m) => m.status === 'open');
-  if (!open.length) { box.innerHTML = '<div class="empty" style="padding:14px 6px">暂无进行中的课题</div>'; return; }
+  const open = S.missions.filter((m) => m.status === 'open' && m.channel === S.cur);
+  if (!open.some(m => m.tasks.length)) { box.innerHTML = '<div class="empty">准备就绪，等待派发研究任务</div>'; return; }
   box.innerHTML = '';
   for (const m of open.slice(0, 3)) {
     for (const t of m.tasks) {
@@ -448,7 +464,7 @@ function renderMissionSteps() {
             : `<span class="ms-icon">${t.attempts}</span>`;
       row.innerHTML = icon +
         `<div class="ms-body">` +
-        `<div class="ms-title ${st === 'published' ? 'done' : ''}" title="点击展开 / 收起全文">${esc(t.title)}</div>` +
+        `<button class="ms-title ${st === 'published' ? 'done' : ''}" title="${esc(t.badge)} · 点击展开全文">${esc(t.title)}</button>` +
         `<div class="ms-meta">${esc(t.assignee)} · R${t.attempts} · ${esc(t.badge)}</div>` +
         `</div>`;
       row.querySelector('.ms-title').onclick = () => toggleTaskPreview(row, t.id);
@@ -477,6 +493,8 @@ function renderPipeline() {
 function renderPanel() {
   renderPipeline();
   renderMissionSteps();
+  renderProjectTree();
+  renderResources();
   const body = $('panelBody');
   if (panelTab === 'missions') {
     body.innerHTML = '';
@@ -562,10 +580,12 @@ function missionCard(m) {
 /* ---------------- 模态 ---------------- */
 
 function openModal(html) {
+  modalReturnFocus = document.activeElement;
   $('modalBody').innerHTML = html;
   $('modal').classList.remove('hidden');
+  $('modalBody').querySelector('input, select, textarea, button, [tabindex]')?.focus();
 }
-function closeModal() { $('modal').classList.add('hidden'); }
+function closeModal() { $('modal').classList.add('hidden'); modalReturnFocus?.focus(); }
 window.closeModal = closeModal;
 window.showReport = showReport;
 window.showKb = async (domain, name) => {
@@ -707,6 +727,7 @@ $('btnAddAgent').onclick = () => {
 
 const input = $('input');
 input.addEventListener('input', () => {
+  updateSendButton();
   input.style.height = 'auto';
   input.style.height = Math.min(input.scrollHeight, 120) + 'px';
   const upTo = input.value.slice(0, input.selectionStart);
@@ -736,20 +757,34 @@ function showPopup(q, items, sig) {
 function hidePopup() { $('popup').classList.add('hidden'); }
 
 input.addEventListener('keydown', (e) => {
+  if (e.isComposing) return;
+  if (!$('popup').classList.contains('hidden') && ['ArrowDown', 'ArrowUp', 'Enter', 'Escape'].includes(e.key)) {
+    e.preventDefault();
+    if (e.key === 'Escape') return hidePopup();
+    const items = [...$('popup').querySelectorAll('.item')];
+    const index = items.findIndex(item => item.classList.contains('sel'));
+    if (e.key === 'Enter') { items[index]?.click(); updateSendButton(); return; }
+    items[index]?.classList.remove('sel');
+    items[(index + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length]?.classList.add('sel');
+    return;
+  }
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
 });
 $('btnSend').onclick = send;
 
 async function send() {
   const text = input.value.trim();
-  if (!text || !S.cur) return;
-  input.value = ''; input.style.height = 'auto'; hidePopup();
+  if (!text || !S.cur || sending) return;
+  sending = true; updateSendButton(); hidePopup();
   try {
     const j = await api('/api/messages', { method: 'POST', body: { channel: S.cur, text } });
-    (S.msgs[S.cur] = S.msgs[S.cur] || []).push(j.message);
+    const list = S.msgs[j.message.channel] = S.msgs[j.message.channel] || [];
+    if (!list.some(m => m.seq === j.message.seq)) list.push(j.message);
+    if (input.value.trim() === text) { input.value = ''; input.style.height = 'auto'; }
     S.seq = Math.max(S.seq, j.message.seq);
     renderMsgs(); renderStats();
   } catch (e) { toast(e.message, true); }
+  finally { sending = false; updateSendButton(); }
 }
 
 /* ---------------- SSE 实时流 ---------------- */
@@ -771,6 +806,7 @@ function connectSSE() {
     } else if (e.type === 'channel') {
       refreshState().catch(() => {});
     } else if (e.type === 'mission' || e.type === 'task') {
+      if (e.task?.id) delete fullTaskCache[e.task.id];
       refreshState().then(() => { renderPanel(); renderMsgs(); }).catch(() => {});
     } else if (e.type === 'presence') {
       const a = agentOf(e.name);
@@ -782,5 +818,6 @@ function connectSSE() {
 
 /* ---------------- 自动登录 ---------------- */
 
+initializeShellUI();
 if (S.token && S.name) boot().catch(() => { localStorage.removeItem('scitag_token'); location.reload(); });
 else $('gate').classList.remove('hidden');

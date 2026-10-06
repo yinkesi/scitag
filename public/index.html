@@ -3,135 +3,107 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>SciTag · 课题组协作台</title>
+  <meta name="theme-color" content="#fafaf9">
+  <title>SciTag · 科研工作台</title>
+  <link rel="icon" href="brand.svg" type="image/svg+xml">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
+  <svg class="icon-definitions" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs>
+    <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 6h16M4 12h12M4 18h8"/></symbol>
+    <symbol id="i-panel" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M14 4v16"/></symbol>
+    <symbol id="i-left" viewBox="0 0 24 24"><path d="m12 5-7 7 7 7M5 12h15"/></symbol>
+    <symbol id="i-right" viewBox="0 0 24 24"><path d="m12 5 7 7-7 7M19 12H4"/></symbol>
+    <symbol id="i-home" viewBox="0 0 24 24"><path d="m4 11 8-7 8 7v9H4zM9 20v-7h6v7"/></symbol>
+    <symbol id="i-code" viewBox="0 0 24 24"><path d="m7 8-4 4 4 4m10-8 4 4-4 4M14 5l-4 14"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 8h18v12H3zM3 8V5h6l3 3"/></symbol>
+    <symbol id="i-artifact" viewBox="0 0 24 24"><rect x="3" y="11" width="7" height="9" rx="1"/><rect x="14" y="11" width="7" height="9" rx="1"/><path d="M6 11V7a6 6 0 0 1 12 0v4"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 6v6l4 2"/></symbol>
+    <symbol id="i-case" viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V4h8v3M3 12h18"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10" cy="10" r="6"/><path d="m15 15 5 5"/></symbol>
+    <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M6 3v7m0 4v7M18 3v13m0 4v1"/><circle cx="6" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></symbol>
+    <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m7 10 5 5 5-5"/></symbol>
+    <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="4" ry="9"/><path d="M3 12h18"/></symbol>
+    <symbol id="i-file" viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6zM14 3v5h4"/></symbol>
+    <symbol id="i-up" viewBox="0 0 24 24"><path d="M12 19V5m-6 6 6-6 6 6"/></symbol>
+    <symbol id="i-fast" viewBox="0 0 24 24"><path d="m3 6 8 6-8 6zm10 0 8 6-8 6z"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M6 18 18 6"/></symbol>
+  </defs></svg>
 
-  <!-- 登录闸门 -->
-  <div id="gate" class="gate hidden">
-    <div class="gate-inner">
-      <div class="gate-brand">
-        <div class="logo-lg"></div>
-        <h1>SciTag</h1>
-        <p class="gate-tag">RESEARCH GROUP CONSOLE</p>
-        <p class="gate-desc">领导派课题 · agent 带外挂知识库与技能干活<br>成果私聊报主人审阅 · 批准后回群 · 循环至收敛</p>
-        <p class="gate-ver">CONSOLE v1.0 · ZERO-DEPENDENCY</p>
-      </div>
-      <div class="gate-card">
-        <div class="gate-card-head">登入控制台</div>
-        <p class="gate-hint">演示乘组一键进入，或用名字 + token</p>
-        <ul class="gate-quick" id="gateQuick">
-          <li data-login="教授" data-token="demo-jiaoshou"><b>教授</b><span>PI · 课题领导：建课题、派活、汇总</span><i>→</i></li>
-          <li data-login="王研" data-token="demo-wangyan"><b>王研</b><span>研究者 · 小王的主人：审阅成果</span><i>→</i></li>
-          <li data-login="李研" data-token="demo-liyan"><b>李研</b><span>研究者 · 小李的主人：审阅成果</span><i>→</i></li>
-          <li data-login="小王" data-token="demo-xiaowang"><b>小王</b><span>agent · 挂 bone-scaffold 域包</span><i>→</i></li>
-        </ul>
-        <div class="gate-form">
-          <input id="loginName" placeholder="名字" maxlength="24">
-          <input id="loginToken" placeholder="token" class="mono">
-          <button id="btnLogin" class="btn primary">进入</button>
-        </div>
-      </div>
+  <div id="gate" class="gate hidden"><div class="gate-inner">
+    <div class="gate-brand"><img class="logo-lg" src="brand.svg" alt="SciTag"><h1>把研究，向前推进。</h1><p class="gate-tag">SciTag · 科研工作台</p><p class="gate-desc">与研究者和智能体一起工作。<br>从课题、计算到审阅，每一步都有据可查。</p></div>
+    <div class="gate-card"><h2>欢迎回来</h2><p class="gate-hint">选择演示成员，或登录你的账号</p>
+      <ul class="gate-quick" id="gateQuick">
+        <li data-login="教授" data-token="demo-jiaoshou" role="button" tabindex="0"><b>教授</b><span>课题领导 · 建立课题与派发任务</span><i>→</i></li>
+        <li data-login="王研" data-token="demo-wangyan" role="button" tabindex="0"><b>王研</b><span>研究者 · 审阅小王的成果</span><i>→</i></li>
+        <li data-login="李研" data-token="demo-liyan" role="button" tabindex="0"><b>李研</b><span>研究者 · 审阅小李的成果</span><i>→</i></li>
+        <li data-login="小王" data-token="demo-xiaowang" role="button" tabindex="0"><b>小王</b><span>智能体 · 骨支架研究</span><i>→</i></li>
+      </ul>
+      <div class="gate-form"><input id="loginName" aria-label="账号名字" placeholder="名字" maxlength="24" autocomplete="username"><input id="loginToken" aria-label="登录凭据" placeholder="访问令牌" type="password" autocomplete="current-password"><button id="btnLogin" class="btn primary">进入</button></div>
     </div>
-  </div>
+  </div></div>
 
-  <div id="app" class="hidden">
-    <div id="workspace">
-      <!-- Claude Code 式左侧栏 -->
-      <aside id="sidebar">
-        <div class="sb-top">
-          <div class="seg">
-            <button class="seg-btn on" data-seg="talk">会话</button>
-            <button class="seg-btn" data-seg="crew">乘组</button>
-          </div>
-          <div class="brand"><span class="logo"></span><span class="brand-name">SciTag</span></div>
-          <nav class="sb-menu">
-            <button id="btnNewMission" class="sb-menu-row"><i class="glyph">＋</i>新课题</button>
-            <button id="btnPanel" class="sb-menu-row"><i class="glyph">▤</i>任务板</button>
-            <button id="btnDomains" class="sb-menu-row"><i class="glyph">◱</i>域包</button>
-            <button id="btnAddAgent" class="sb-menu-row"><i class="glyph">✚</i>接入 agent</button>
-          </nav>
-        </div>
-        <div class="side-scroll">
-          <section class="side-sec">
-            <div class="side-sec-head"><span>Pinned · 课题组群</span></div>
-            <ul id="channelList" class="side-list"></ul>
-          </section>
-          <section class="side-sec">
-            <div class="side-sec-head"><span>Ungrouped · 私聊</span></div>
-            <ul id="dmList" class="side-list"></ul>
-          </section>
-          <section class="side-sec">
-            <div class="side-sec-head"><span>Members · 成员</span></div>
-            <ul id="rosterList" class="manifest"></ul>
-          </section>
-        </div>
-        <div class="side-foot">
-          <div id="liveStats" class="side-stats" title="平台实时指标"></div>
-          <div class="me-card" id="meCard"></div>
-        </div>
-      </aside>
+  <div id="app" class="hidden"><div id="workspace">
+    <button id="sidebarBackdrop" class="sidebar-backdrop hidden" aria-label="关闭侧栏"></button>
+    <aside id="sidebar" aria-label="工作台导航">
+      <div class="window-tools">
+        <button id="btnSidebar" class="icon-btn" aria-label="收起侧栏" title="收起侧栏"><svg class="icon"><use href="#i-menu"/></svg></button>
+        <button id="btnSidebarView" class="icon-btn" aria-label="切换成员视图" title="成员视图"><svg class="icon"><use href="#i-panel"/></svg></button>
+        <button id="btnBack" class="icon-btn" aria-label="上一会话" disabled><svg class="icon"><use href="#i-left"/></svg></button>
+        <button id="btnForward" class="icon-btn" aria-label="下一会话" disabled><svg class="icon"><use href="#i-right"/></svg></button>
+      </div>
+      <div class="sb-top">
+        <div class="seg" aria-label="工作台视图"><button class="seg-btn on" data-seg="talk" aria-pressed="true"><svg class="icon"><use href="#i-home"/></svg>Home</button><button class="seg-btn" data-seg="crew" aria-pressed="false"><svg class="icon"><use href="#i-code"/></svg>Code</button></div>
+        <nav class="sb-menu" aria-label="快捷操作">
+          <button id="btnNewMission" class="sb-menu-row"><span class="new-icon"><svg class="icon"><use href="#i-plus"/></svg></span>New</button>
+          <button id="btnPanel" class="sb-menu-row"><svg class="icon"><use href="#i-folder"/></svg>Projects</button>
+          <button id="btnArtifacts" class="sb-menu-row"><svg class="icon"><use href="#i-artifact"/></svg>Artifacts</button>
+          <button id="btnDomains" class="sb-menu-row"><svg class="icon"><use href="#i-clock"/></svg>Knowledge</button>
+          <button id="btnAddAgent" class="sb-menu-row"><svg class="icon"><use href="#i-case"/></svg>Customize</button>
+        </nav>
+      </div>
+      <div class="side-scroll">
+        <section class="side-sec" id="groupSection"><div class="side-sec-head"><span>Pinned</span></div><ul id="channelList" class="side-list"></ul><ul id="projectList" class="project-tree"></ul></section>
+        <section class="side-sec" id="chatSection">
+          <div class="side-sec-head"><span>Chats</span><div><button id="btnSearchChats" class="icon-btn" aria-label="搜索会话"><svg class="icon"><use href="#i-search"/></svg></button><button id="btnChatFilters" class="icon-btn" aria-label="切换成员视图"><svg class="icon"><use href="#i-sliders"/></svg></button></div></div>
+          <input id="chatSearch" class="hidden" aria-label="搜索会话名称" placeholder="搜索会话…" type="search">
+          <ul id="dmList" class="side-list"></ul><p id="emptyChats" class="side-empty">选择成员，开始私聊</p><button id="btnViewMembers" class="view-all">View all members</button>
+        </section>
+        <section class="side-sec hidden" id="crewSection"><div class="side-sec-head"><span>Members</span></div><ul id="rosterList" class="manifest"></ul></section>
+      </div>
+      <div class="side-foot"><button class="me-card" id="meCard" aria-label="账号与工作台信息"></button></div>
+    </aside>
 
-      <!-- 主区 -->
-      <main id="main">
-        <header id="chatHead">
-          <div class="chat-head-txt">
-            <div id="chatTitle"><span id="chatTitleTxt">—</span> <span class="chev-title">▾</span></div>
-            <div id="chatSub"></div>
-          </div>
-          <div class="chat-head-actions">
-            <span id="chatMeta" class="chat-meta"></span>
-          </div>
-        </header>
-        <div id="msgList"></div>
-        <div id="composer">
-          <div id="popup" class="hidden"></div>
-          <button id="scrollDown" class="scroll-fab" title="回到底部">↓</button>
-          <div class="composer-box">
-            <textarea id="input" rows="2" placeholder="发消息给课题组…"></textarea>
-            <div class="composer-bar">
-              <div class="bar-left">
-                <button id="tbAt" class="tb-chip" title="提及成员">＠</button>
-                <button id="tbSkill" class="tb-chip" title="点名技能">#</button>
-                <span class="tb-hint">Enter 发送 · Shift+Enter 换行</span>
-              </div>
-              <div class="bar-right">
-                <button id="tbDomain" class="tb-chip"><span id="tbDomainName">bone-scaffold</span> ▾</button>
-                <button id="btnSend" class="send-fab" title="发送">↑</button>
-              </div>
-            </div>
-          </div>
-          <p class="composer-foot">SciTag 是多智能体科研系统 · 成果须经主人审阅后回群 · 请复核关键数据</p>
+    <main id="main">
+      <header id="chatHead">
+        <button id="btnOpenSidebar" class="icon-btn hidden" aria-label="展开侧栏"><svg class="icon"><use href="#i-menu"/></svg></button>
+        <button id="chatTitle" class="chat-head-txt" aria-label="查看当前会话信息"><span id="chatTitleTxt">SciTag</span><svg class="icon"><use href="#i-chevron"/></svg></button>
+        <span id="chatSub" class="hidden"></span><div class="chat-head-actions"><span id="chatMeta" class="hidden"></span><button id="btnContext" class="icon-btn" aria-label="查看研究上下文" title="研究上下文"><svg class="icon"><use href="#i-globe"/></svg></button><button id="btnTogglePanel" class="icon-btn on" aria-label="收起工作面板" aria-expanded="true" title="工作面板"><svg class="icon"><use href="#i-panel"/></svg></button></div>
+      </header>
+      <div id="msgList" role="log" aria-label="会话消息" aria-live="polite"></div>
+      <div id="composer">
+        <div id="popup" class="hidden"></div><button id="scrollDown" class="scroll-fab" aria-label="回到底部" title="回到底部">↓</button>
+        <div class="composer-box"><textarea id="input" rows="1" aria-label="撰写消息" placeholder="Write a message…"></textarea>
+          <div class="composer-bar"><div class="bar-left"><button id="tbAt" class="icon-btn" aria-label="提及成员" title="提及成员"><svg class="icon"><use href="#i-plus"/></svg></button><button id="tbSkill" class="icon-btn" aria-label="选择研究技能" title="选择研究技能"><svg class="icon"><use href="#i-folder"/></svg></button><button id="tbMode" class="tb-chip" title="查看执行模式"><svg class="icon"><use href="#i-fast"/></svg>Auto<svg class="icon small"><use href="#i-chevron"/></svg></button></div><div class="bar-right"><button id="tbDomain" class="tb-chip" title="切换到知识库"><span id="tbDomainName">SciTag Research</span><span class="model-detail">协作</span></button><button id="btnSend" class="send-fab" aria-label="发送消息" title="发送消息" disabled><svg class="icon"><use href="#i-up"/></svg></button></div></div>
         </div>
-      </main>
+        <p class="composer-foot">SciTag 的研究成果需要审阅。请复核关键数据与结论。</p>
+      </div>
+    </main>
 
-      <!-- Claude Code 式右侧任务面板 -->
-      <aside id="panel" class="hidden">
-        <header class="panel-head">
-          <span class="panel-title">任务板</span>
-          <button id="btnClosePanel" class="mini">×</button>
-        </header>
-        <div class="panel-scroll">
-          <section class="psec">
-            <div class="psec-head open"><i class="chev">▾</i>Progress · 任务进度</div>
-            <div id="pipeline" class="pipeline"></div>
-            <div id="missionSteps"></div>
-          </section>
-          <div class="tabs">
-            <button data-tab="missions" class="on">课题</button>
-            <button data-tab="reviews">待我审</button>
-            <button data-tab="domains">域包</button>
-          </div>
-          <div id="panelBody" class="panel-body"></div>
-        </div>
-      </aside>
-    </div>
-  </div>
-
-  <div id="modal" class="modal-mask hidden"><div class="modal" id="modalBody"></div></div>
-  <div id="toast" class="hidden"></div>
-
+    <aside id="panel" aria-label="研究工作面板">
+      <div class="work-card">
+        <section class="psec progress-section"><div class="psec-heading"><button class="section-toggle" aria-expanded="true" aria-controls="progressContent">Progress<svg class="icon small"><use href="#i-chevron"/></svg></button><button id="btnClosePanel" class="icon-btn panel-close" aria-label="关闭工作面板"><svg class="icon"><use href="#i-close"/></svg></button></div><div id="progressContent"><div id="missionSteps"></div><div id="pipeline" class="pipeline"></div></div></section>
+        <section class="psec working-section"><div class="psec-heading"><button class="section-toggle" aria-expanded="true" aria-controls="workingContent">Working folder<svg class="icon small"><use href="#i-chevron"/></svg></button><button id="btnWorkingFolder" class="icon-btn" aria-label="查看域包资源" title="域包资源"><svg class="icon"><use href="#i-folder"/></svg></button></div><div id="workingContent"><div id="resourceList" class="resource-list"></div></div></section>
+        <section class="psec context-section"><button id="contextToggle" class="section-toggle" aria-expanded="false" aria-controls="contextContent">Context<svg class="icon small"><use href="#i-chevron"/></svg></button><div id="contextContent" class="hidden"><p id="liveStats" class="side-stats"></p><p id="contextSummary"></p><button id="btnReviewQueue" class="context-link">查看待审成果 →</button></div></section>
+      </div>
+      <section id="projectPanel" class="work-card project-panel hidden" aria-label="课题与成果"><div class="tabs"><button data-tab="missions" class="on">课题</button><button data-tab="reviews">待我审</button><button data-tab="domains">域包</button></div><div id="panelBody" class="panel-body"></div></section>
+    </aside>
+  </div></div>
+  <div id="modal" class="modal-mask hidden" role="dialog" aria-modal="true" aria-label="工作台详情"><div class="modal" id="modalBody"></div></div>
+  <div id="toast" class="hidden" role="status" aria-live="polite"></div>
+  <script src="workspace.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
