@@ -155,23 +155,28 @@ function renderStats(jobs) {
     `作业 <b>${j.working || 0}</b>`,
     `课题 <b>${S.missions.filter((m) => m.status === 'open').length}</b>`,
   ];
-  $('liveStats').innerHTML = parts.map((p) => `<span class="stat">${p}</span>`).join('<span class="sep">·</span>');
+  $('liveStats').innerHTML = parts.join(' · ') + ' · LENOVO';
 }
 
-/* ---------------- 侧栏：索引 + 乘组清单 ---------------- */
+/* ---------------- 侧栏（Claude Code 式：菜单行 + Pinned 群组树 + 私聊 + 成员） ---------------- */
+
+function chRow(c, label) {
+  const li = document.createElement('li');
+  if (c.id === S.cur) li.classList.add('on');
+  li.innerHTML = `<span class="node"></span><span class="ch-name">${esc(c.name)}</span><span class="n-members">${esc(label)}</span>`;
+  li.onclick = () => openChannel(c.id);
+  return li;
+}
 
 function renderSidebar() {
   const ul = $('channelList');
   ul.innerHTML = '';
-  S.channels.forEach((c, i) => {
-    const li = document.createElement('li');
-    if (c.id === S.cur) li.classList.add('on');
-    li.innerHTML =
-      `<span class="ch-name">${esc(c.name)}</span>` +
-      (c.type === 'group' ? `<span class="n-members">${c.members.length} 人</span>` : `<span class="n-members">私聊</span>`);
-    li.onclick = () => openChannel(c.id);
-    ul.appendChild(li);
-  });
+  for (const c of S.channels.filter((x) => x.type === 'group')) ul.appendChild(chRow(c, `${c.members.length} 人`));
+
+  const dl = $('dmList');
+  dl.innerHTML = '';
+  for (const c of S.channels.filter((x) => x.type === 'dm')) dl.appendChild(chRow(c, '私聊'));
+  dl.parentElement.style.display = S.channels.some((x) => x.type === 'dm') ? '' : 'none';
 
   const rl = $('rosterList');
   rl.innerHTML = '';
@@ -184,11 +189,7 @@ function renderSidebar() {
     li.innerHTML =
       `<span class="avatar" style="background:hsl(${a.hue},20%,42%)">${esc(a.name[0])}</span>` +
       `<span class="m-name">${esc(a.name)}</span>` +
-      `<span class="m-role"><span class="dot${a.online ? ' on' : ''}"></span> ${esc(role)}</span>` +
-      `<span class="m-tags">` +
-      (a.kind === 'agent' ? '<span class="badge dom">agent</span>' : '') +
-      ((a.domains || []).map((d) => `<span class="badge dom">${esc(d)}</span>`).join('')) +
-      `</span>`;
+      `<span class="m-role"><span class="dot${a.online ? ' on' : ''}"></span> ${esc(role)}</span>`;
     li.onclick = () => openDm(a.name);
     rl.appendChild(li);
   }
@@ -197,10 +198,6 @@ function renderSidebar() {
   $('meCard').innerHTML = S.me
     ? `<span class="avatar" style="background:hsl(${S.me.hue},20%,42%)">${esc(S.me.name[0])}</span><span><div class="me-name">${esc(S.me.name)}</div><div class="me-role">${esc(role)}</div></span>`
     : '';
-
-  $('domainsInfo').innerHTML = S.domains.length
-    ? S.domains.map((d) => `${esc(d.name)} · ${d.skills.length}技能 / ${d.kbCount}条`).join('<br>')
-    : 'domains/ 下暂无域包';
 }
 
 async function openDm(name) {
@@ -214,7 +211,7 @@ async function openDm(name) {
 async function openChannel(id) {
   S.cur = id;
   const c = S.channels.find((x) => x.id === id);
-  $('chatTitle').textContent = c ? (c.type === 'dm' ? '与 ' + c.name : c.name) : '—';
+  $('chatTitleTxt').textContent = c ? (c.type === 'dm' ? '与 ' + c.name : c.name) : '—';
   $('chatSub').textContent = c?.topic || (c?.type === 'dm' ? '成果汇报与审阅（仅你们可见）' : '');
   $('chatMeta').innerHTML = c
     ? (c.type === 'dm'
@@ -390,7 +387,75 @@ document.querySelectorAll('.tabs button').forEach((b) => {
   };
 });
 $('btnPanel').onclick = () => $('panel').classList.remove('hidden');
+
+// 分段控制：会话 / 乘组 两个视图
+for (const b of document.querySelectorAll('.seg-btn')) {
+  b.onclick = () => {
+    document.querySelectorAll('.seg-btn').forEach((x) => x.classList.toggle('on', x === b));
+    const talk = b.dataset.seg === 'talk';
+    document.querySelectorAll('.side-sec').forEach((sec, i) => {
+      if (i < 2) sec.style.display = talk ? '' : 'none';   // Pinned 群组 + 私聊
+      else sec.style.display = talk ? 'none' : '';          // 成员
+    });
+  };
+}
 $('btnClosePanel').onclick = () => $('panel').classList.add('hidden');
+
+/** 侧栏「域包」菜单 / 撰写条右下的域包▾：打开任务板并切到域包页 */
+function openDomainsTab() {
+  $('panel').classList.remove('hidden');
+  const b = [...document.querySelectorAll('.tabs button')].find((x) => x.dataset.tab === 'domains');
+  if (b) b.click();
+}
+$('btnDomains').onclick = openDomainsTab;
+$('tbDomain').onclick = openDomainsTab;
+
+/** 撰写条工具条：＠/# 直接触发补全（模拟输入前缀） */
+function toolbarTrigger(sig) {
+  input.focus();
+  const v = input.value;
+  input.value = v + sig;
+  input.setSelectionRange(input.value.length, input.value.length);
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+}
+$('tbAt').onclick = () => toolbarTrigger('@');
+$('tbSkill').onclick = () => toolbarTrigger('#');
+
+/** 滚动到底圆钮：离开底部时出现 */
+const msgListEl = $('msgList');
+msgListEl.addEventListener('scroll', () => {
+  $('scrollDown').classList.toggle('show', !nearBottom(msgListEl));
+});
+$('scrollDown').onclick = () => { msgListEl.scrollTop = msgListEl.scrollHeight; };
+
+/** Progress 步骤清单（Claude Code 的 ✓✓③○）：开放课题的任务按状态出步骤行 */
+function renderMissionSteps() {
+  const box = $('missionSteps');
+  const open = S.missions.filter((m) => m.status === 'open');
+  if (!open.length) { box.innerHTML = '<div class="empty" style="padding:14px 6px">暂无进行中的课题</div>'; return; }
+  box.innerHTML = '';
+  for (const m of open.slice(0, 3)) {
+    for (const t of m.tasks) {
+      const row = document.createElement('div');
+      row.className = 'ms-row';
+      const st = t.status;
+      const icon = (st === 'published' || st === 'approved')
+        ? `<span class="ms-icon done">✓</span>`
+        : st === 'failed'
+          ? `<span class="ms-icon fail">✕</span>`
+          : st === 'dispatched'
+            ? `<span class="ms-icon todo">○</span>`
+            : `<span class="ms-icon">${t.attempts}</span>`;
+      row.innerHTML = icon +
+        `<div class="ms-body">` +
+        `<div class="ms-title ${st === 'published' ? 'done' : ''}" title="点击展开 / 收起全文">${esc(t.title)}</div>` +
+        `<div class="ms-meta">${esc(t.assignee)} · R${t.attempts} · ${esc(t.badge)}</div>` +
+        `</div>`;
+      row.querySelector('.ms-title').onclick = () => toggleTaskPreview(row, t.id);
+      box.appendChild(row);
+    }
+  }
+}
 
 function renderPipeline() {
   const by = { dispatched: 0, working: 0, reported: 0, published: 0, failed: 0 };
@@ -411,6 +476,7 @@ function renderPipeline() {
 
 function renderPanel() {
   renderPipeline();
+  renderMissionSteps();
   const body = $('panelBody');
   if (panelTab === 'missions') {
     body.innerHTML = '';

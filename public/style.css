@@ -1,172 +1,203 @@
 /* ============================================================
-   SciTag —— Claude 界面结构 × 蓝白配色
-   结构照搬 claude.ai：无顶栏；左侧栏（品牌/新建按钮/会话/成员/
-     底部账号）；主区消息流（他人消息无气泡纯文本、自己的消息
-     柔色块）；撰写条为内嵌发送按钮的一体式大圆角容器。
-   配色不变：近中性微灰底 + 白卡 + 雾蓝 #3568ad 强调。
-   圆角刻度不变：10/14/18/24 + 胶囊 + 圆。
+   SciTag —— Claude Code 界面完整复刻 × 蓝白配色（配色是唯一差异）
+   结构逐项对照 Claude Code 桌面端：
+   · 左侧栏：菜单行（⊕新课题/任务板/域包/接入）+ Pinned 群组树 +
+     Ungrouped 私聊 + 成员 + 底部状态行/账号
+   · 主区：标题▾ 头部；纯文本消息（**粗体**/蓝链接）、右对齐浅灰用户
+     气泡、文件式文档卡；小字灰色系统日志
+   · 右侧任务面板：Progress ▾ 步骤清单（✓✓③○ 状态图标）+ 课题/
+     待我审/域包；Working folder 式文件列表
+   · 底部：高输入框（内嵌工具条：＠/# 左侧 · 域包▾ + 圆形发送钮右侧）、
+     滚动到底圆钮、页脚灰色免责行
+   · 全无衬线字体（Claude Code 不用衬线）；等宽只给路径/流水号
    ============================================================ */
 * { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
-  --panel: #eff1f4;      /* 侧栏底（近中性微灰） */
-  --paper: #f8f9fa;      /* 主区底 */
+  --paper: #f7f8f9;      /* 全局底（侧栏与主区同底色，仅 hairline 分隔——Claude Code 同款） */
   --card: #ffffff;
-  --ink: #24303f;
-  --ink2: #4f5b6c;
-  --mut: #8a95a5;
-  --line: #e6ebf2;
-  --line2: #d8dfe9;
-  --acc: #3568ad;        /* 雾蓝（唯一强调色） */
+  --ink: #26292e;        /* 主文字 */
+  --ink2: #565b64;
+  --mut: #8b919b;        /* 次级灰 */
+  --faint: #aeb4bd;      /* 最弱灰（页脚/组标签） */
+  --line: #e7eaee;       /* hairline */
+  --line2: #dde1e7;
+  --acc: #3568ad;        /* 雾蓝：链接/进度✓/发送钮（唯一强调色） */
   --acc-hi: #2d5b97;
   --acc-tint: #e9f0f9;
+  --bubble: #eceff3;     /* 用户消息浅灰气泡（Claude Code 同款灰，不用蓝） */
   --ok: #4c7d5c;
   --warn: #9a7235;
   --bad: #a85c55;
-  --chip: #eef1f6;
-  --r-sm: 10px;
-  --r-md: 14px;
-  --r-lg: 18px;
-  --r-xl: 24px;
-  --serif: Georgia, Cambria, "Times New Roman", "Noto Serif SC", "Source Han Serif SC", SimSun, serif;
+  --chip: #eef1f5;
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 14px;
+  --r-xl: 18px;
   --sans: "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
   --mono: ui-monospace, Consolas, "Cascadia Mono", monospace;
 }
 html, body { height: 100%; }
 body {
   background: var(--paper); color: var(--ink);
-  font: 15px/1.75 var(--sans);
+  font: 14.5px/1.7 var(--sans);
   -webkit-font-smoothing: antialiased;
 }
-::selection { background: rgba(53,104,173,.16); }
+::selection { background: rgba(53,104,173,.18); }
 .hidden { display: none !important; }
 .mono { font-family: var(--mono); }
 button { font: inherit; color: inherit; background: none; border: none; cursor: pointer; }
 input, textarea, select {
   font: inherit; color: var(--ink); background: var(--card);
-  border: 1px solid var(--line2); border-radius: var(--r-md); padding: 9px 14px; outline: none;
+  border: 1px solid var(--line2); border-radius: var(--r-md); padding: 8px 12px; outline: none;
 }
 input:focus, textarea:focus { border-color: var(--acc); box-shadow: 0 0 0 3px rgba(53,104,173,.10); }
 
-/* ---------------- 骨架：无顶栏，两栏起步 ---------------- */
+/* ---------------- 骨架 ---------------- */
 #app { height: 100vh; }
 #workspace { display: flex; height: 100%; min-height: 0; }
 
-/* ---------------- 侧栏（Claude 式） ---------------- */
-#sidebar { width: 264px; min-width: 264px; background: var(--panel); border-right: 1px solid var(--line); display: flex; flex-direction: column; }
-.sb-top { padding: 18px 16px 12px; display: flex; flex-direction: column; gap: 14px; }
-.brand { display: flex; align-items: center; gap: 10px; padding: 0 4px; }
-.logo { width: 13px; height: 13px; border-radius: 50%; background: var(--acc); flex: none; }
-.brand-name { font-family: var(--serif); font-size: 20px; font-weight: 700; letter-spacing: .01em; }
-.btn-block { width: 100%; justify-content: center; padding: 10px 18px; }
+/* ---------------- 左侧栏（Claude Code 式） ---------------- */
+#sidebar { width: 264px; min-width: 264px; background: var(--paper); border-right: 1px solid var(--line); display: flex; flex-direction: column; }
+.sb-top { padding: 16px 12px 8px; }
+.brand { display: flex; align-items: center; gap: 9px; padding: 0 8px 12px; }
+.logo { width: 12px; height: 12px; border-radius: 50%; background: var(--acc); flex: none; }
+.brand-name { font-size: 15px; font-weight: 700; letter-spacing: .01em; }
 
-.side-scroll { flex: 1; overflow-y: auto; padding: 4px 12px 12px; }
-.side-sec { margin-bottom: 20px; }
+.sb-menu { display: flex; flex-direction: column; gap: 1px; }
+.sb-menu-row {
+  display: flex; align-items: center; gap: 11px; padding: 7px 10px;
+  border-radius: var(--r-sm); color: var(--ink2); font-size: 14px; text-align: left;
+}
+.sb-menu-row:hover { background: rgba(38,41,46,.05); color: var(--ink); }
+.sb-menu-row .glyph {
+  width: 17px; height: 17px; flex: none; display: flex; align-items: center; justify-content: center;
+  font: 500 12px var(--mono); font-style: normal; color: var(--mut);
+}
+
+.side-scroll { flex: 1; overflow-y: auto; padding: 8px 12px 12px; }
+.side-sec { margin-bottom: 14px; }
 .side-sec-head {
   display: flex; justify-content: space-between; align-items: center;
-  font-size: 11.5px; font-weight: 600; color: var(--mut); padding: 0 10px 8px;
+  font-size: 11px; font-weight: 600; color: var(--faint); padding: 6px 8px 5px;
 }
-.mini { font-size: 12px; color: var(--mut); padding: 3px 9px; border-radius: var(--r-sm); }
-.mini:hover { background: rgba(36,48,63,.06); color: var(--ink); }
+.mini { font-size: 12px; color: var(--mut); padding: 2px 8px; border-radius: var(--r-sm); }
+.mini:hover { background: rgba(38,41,46,.06); color: var(--ink); }
 
-.side-list, .manifest { list-style: none; }
+/* 会话行（Claude Code 树形：缩进 + 圆圈标记 + 竖向连接线） */
+.side-list, .manifest { list-style: none; position: relative; }
 .side-list li {
-  display: flex; align-items: center; gap: 8px; padding: 8px 12px; margin: 2px 0;
-  border-radius: var(--r-sm); cursor: pointer; color: var(--ink2); white-space: nowrap; overflow: hidden;
-  font-size: 14px;
+  position: relative;
+  display: flex; align-items: center; gap: 9px; padding: 6px 10px 6px 14px; margin: 1px 0;
+  border-radius: var(--r-sm); cursor: pointer; color: var(--ink2);
+  white-space: nowrap; overflow: hidden; font-size: 13.5px;
 }
-.side-list li:hover { background: rgba(36,48,63,.05); color: var(--ink); }
-.side-list li.on { background: var(--card); color: var(--ink); font-weight: 600; box-shadow: 0 1px 3px rgba(36,48,63,.05); }
+.side-list li::before {               /* 树缩进竖线（Claude Code 的 Pinned 连接线） */
+  content: ''; position: absolute; left: 5px; top: 0; bottom: 0;
+  border-left: 1px solid var(--line2);
+}
+.side-list li:first-child::before { top: 50%; }
+.side-list li:last-child::before { bottom: 50%; }
+.side-list li .node {
+  width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid var(--line2);
+  background: var(--paper); flex: none; margin-left: 4px;
+}
+.side-list li:hover { background: rgba(38,41,46,.05); color: var(--ink); }
+.side-list li.on { background: var(--chip); color: var(--ink); font-weight: 600; }
+.side-list li.on .node { border-color: var(--acc); background: var(--acc); }
 .ch-name { flex: 1; overflow: hidden; text-overflow: ellipsis; }
-.side-list .n-members { font-size: 11.5px; color: var(--mut); flex: none; }
+.side-list .n-members { font-size: 11px; color: var(--faint); flex: none; }
 
-/* 乘组清单 */
+/* 成员清单 */
 .manifest li {
-  display: flex; align-items: center; gap: 10px; padding: 8px 12px; margin: 2px 0;
-  border-radius: var(--r-sm); cursor: pointer;
+  display: flex; align-items: center; gap: 9px; padding: 5px 10px 5px 14px; margin: 1px 0;
+  border-radius: var(--r-sm); cursor: pointer; position: relative;
 }
-.manifest li:hover { background: rgba(36,48,63,.05); }
+.manifest li::before {
+  content: ''; position: absolute; left: 5px; top: 0; bottom: 0; border-left: 1px solid var(--line2);
+}
+.manifest li:first-child::before { top: 50%; }
+.manifest li:last-child::before { bottom: 50%; }
+.manifest li:hover { background: rgba(38,41,46,.05); }
 .avatar {
-  width: 27px; height: 27px; border-radius: 50%; flex: none;
+  width: 22px; height: 22px; border-radius: 50%; flex: none; margin-left: 4px;
   display: flex; align-items: center; justify-content: center;
-  font: 600 11.5px var(--serif); color: #fff;
+  font: 600 10px var(--sans); color: #fff;
 }
-.m-name { font-size: 14px; font-weight: 600; white-space: nowrap; }
-.m-role { font-size: 11.5px; color: var(--mut); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; }
-.m-tags { display: flex; gap: 4px; flex: none; }
-.dot { width: 7px; height: 7px; border-radius: 50%; background: #c8cfd9; flex: none; }
+.m-name { font-size: 13.5px; font-weight: 600; white-space: nowrap; color: var(--ink2); }
+.m-role { font-size: 11px; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; }
+.dot { width: 6px; height: 6px; border-radius: 50%; background: #c6cbd3; flex: none; }
 .dot.on { background: var(--ok); }
 .badge {
-  font-size: 10.5px; padding: 1px 8px; border-radius: 999px;
+  font-size: 10px; padding: 1px 7px; border-radius: 999px;
   background: var(--chip); color: var(--mut); font-weight: 400;
 }
 .badge.dom { color: var(--mut); background: transparent; border: 1px solid var(--line); }
 
-/* 侧栏底部：指标 / 域包 / 账号（Claude 式 profile 区） */
-.side-foot { border-top: 1px solid var(--line); padding: 12px 16px 14px; display: flex; flex-direction: column; gap: 10px; }
-.side-stats { display: flex; flex-wrap: wrap; gap: 3px 10px; font-size: 11px; color: var(--mut); }
-.side-stats .stat { white-space: nowrap; }
-.side-stats .stat b { font-weight: 600; color: var(--ink2); }
+/* 侧栏底部状态行 + 账号（Claude Code 底部 "LENOVO · Codex · 27°C"） */
+.side-foot { border-top: 1px solid var(--line); padding: 10px 14px 12px; display: flex; flex-direction: column; gap: 9px; }
+.side-stats { display: block; font-size: 10.5px; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.side-stats .stat b { font-weight: 600; color: var(--mut); }
 .side-stats .stat .live { color: var(--ok); }
-.side-stats .sep { color: var(--line2); }
-.side-domains { font-size: 11px; color: var(--mut); line-height: 1.7; }
-.me-card { display: flex; align-items: center; gap: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
-.me-card .avatar { width: 30px; height: 30px; }
-.me-card .me-name { font-size: 13.5px; font-weight: 600; }
-.me-card .me-role { font-size: 11px; color: var(--mut); }
+.me-card { display: flex; align-items: center; gap: 9px; }
+.me-card .avatar { width: 26px; height: 26px; margin-left: 0; font-size: 11px; }
+.me-card .me-name { font-size: 13px; font-weight: 600; }
+.me-card .me-role { font-size: 11px; color: var(--faint); }
+.side-domains { font-size: 11px; color: var(--faint); line-height: 1.7; }
 
 /* ---------------- 主区 ---------------- */
 #main { flex: 1; display: flex; flex-direction: column; min-width: 0; background: var(--paper); }
-#chatHead { display: flex; justify-content: space-between; align-items: center; padding: 18px 30px 16px; }
-#chatTitle { font-family: var(--serif); font-weight: 700; font-size: 19px; letter-spacing: .005em; }
-#chatSub { font-size: 12.5px; color: var(--mut); margin-top: 4px; }
-.chat-head-actions { display: flex; align-items: center; gap: 12px; }
-.chat-meta { font-size: 11.5px; color: var(--mut); white-space: nowrap; }
-#msgList { flex: 1; overflow-y: auto; padding: 4px 30px 20px; }
+#chatHead { display: flex; justify-content: space-between; align-items: center; padding: 14px 26px 10px; }
+#chatTitle { font-size: 16px; font-weight: 700; display: flex; align-items: center; gap: 6px; }
+.chev-title { font-size: 10px; color: var(--faint); }
+#chatSub { font-size: 12px; color: var(--mut); margin-top: 1px; }
+.chat-head-actions { display: flex; align-items: center; gap: 10px; }
+.chat-meta { font: 400 11px var(--mono); color: var(--faint); white-space: nowrap; }
+#msgList { flex: 1; overflow-y: auto; padding: 6px 26px 14px; }
 
-/* 消息：Claude 式——他人无气泡纯文本，自己柔色块 */
-.msg { margin-bottom: 22px; display: flex; }
+/* 消息：Claude Code 式排版 */
+.msg { margin-bottom: 20px; display: flex; }
 .msg .body { min-width: 0; max-width: 100%; }
-.msg .meta { display: flex; align-items: baseline; gap: 9px; margin-bottom: 4px; }
-.meta b { font-size: 13px; font-weight: 600; }
-.meta .time { font: 400 11px var(--mono); color: var(--mut); }
+.msg .meta { display: flex; align-items: baseline; gap: 8px; margin-bottom: 3px; }
+.meta b { font-size: 12.5px; font-weight: 700; color: var(--ink2); }
+.meta .time { font: 400 10.5px var(--mono); color: var(--faint); }
 .msg .bubble {
-  background: transparent; border: none; border-radius: 0; padding: 0;
-  overflow-wrap: anywhere; white-space: pre-wrap;
+  background: transparent; border: none; padding: 0;
+  overflow-wrap: anywhere; white-space: pre-wrap; font-size: 14.5px; line-height: 1.75;
 }
+.msg .bubble b { font-weight: 600; }
 .msg.mine { justify-content: flex-end; }
-.msg.mine .body { max-width: 76%; text-align: right; }
+.msg.mine .body { max-width: 74%; text-align: right; }
 .msg.mine .bubble {
-  background: var(--acc-tint); border-radius: var(--r-md); padding: 10px 16px 11px;
+  background: var(--bubble); border-radius: var(--r-lg); padding: 9px 15px 10px;
   display: inline-block; text-align: left;
 }
 .msg .mention { color: var(--acc); font-weight: 600; }
-.msg .skilltag { color: var(--warn); font-weight: 600; }
-.msg.sys { justify-content: center; }
-.msg.sys .body { max-width: 90%; text-align: center; font-size: 12px; color: var(--mut); }
+.msg .skilltag { color: var(--acc); font-weight: 600; }
+.msg.sys { justify-content: flex-start; }
+.msg.sys .body { font-size: 12px; color: var(--faint); padding-left: 12px; border-left: 2px solid var(--line2); max-width: 100%; }
 .msg.sys .meta { display: none; }
 
-/* ---------------- 文档卡：白卡浮起 ---------------- */
+/* ---------------- 文档卡（Claude Code 的文件卡样式） ---------------- */
 .doc {
-  background: var(--card); border: 1px solid var(--line); border-radius: var(--r-lg);
-  padding: 16px 18px 6px; max-width: 600px; min-width: 320px;
-  box-shadow: 0 1px 3px rgba(36,48,63,.03);
+  background: var(--card); border: 1px solid var(--line2); border-radius: var(--r-md);
+  padding: 13px 16px 5px; max-width: 620px; min-width: 320px;
 }
-.doc-head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.doc-head { display: flex; align-items: center; gap: 10px; margin-bottom: 5px; }
 .k {
-  font-size: 11px; font-weight: 600; letter-spacing: .06em; padding: 2px 10px;
-  border-radius: 999px; flex: none;
+  font-size: 10.5px; font-weight: 600; letter-spacing: .05em; padding: 2px 9px;
+  border-radius: 6px; flex: none;
 }
-.doc-title { font-family: var(--serif); font-weight: 700; font-size: 15.5px; flex: 1; min-width: 0; line-height: 1.45; }
-.doc-meta { font-size: 12px; color: var(--mut); margin-bottom: 9px; }
+.doc-title { font-size: 14.5px; font-weight: 700; flex: 1; min-width: 0; line-height: 1.4; }
+.doc-meta { font: 400 11.5px var(--mono); color: var(--mut); margin-bottom: 8px; }
 .doc .digest {
-  font-size: 13.5px; line-height: 1.75; color: var(--ink2); background: var(--paper);
-  border-radius: var(--r-md); padding: 14px 18px; margin: 9px 0;
+  font-size: 13.5px; line-height: 1.75; color: var(--ink2);
+  background: var(--paper); border: 1px solid var(--line);
+  border-radius: var(--r-sm); padding: 12px 16px; margin: 8px 0;
   max-height: 220px; overflow-y: auto; white-space: pre-wrap;
 }
-.doc .digest.note { background: rgba(154,114,53,.08); }
-.doc-actions { display: flex; gap: 8px; padding: 3px 0 12px; flex-wrap: wrap; }
-
-/* 类别章：柔色胶囊 */
+.doc .digest b { color: var(--ink); font-weight: 600; }
+.doc .digest.note { background: rgba(154,114,53,.06); }
+.doc-actions { display: flex; gap: 7px; padding: 3px 0 11px; flex-wrap: wrap; }
 .doc.t-task .k     { color: var(--acc);  background: var(--acc-tint); }
 .doc.t-mission .k  { color: var(--ink2); background: var(--chip); }
 .doc.t-review .k,
@@ -174,191 +205,226 @@ input:focus, textarea:focus { border-color: var(--acc); box-shadow: 0 0 0 3px rg
 .doc.t-publish .k  { color: var(--acc); background: var(--acc-tint); }
 .doc.t-fail .k     { color: var(--bad); background: rgba(168,92,85,.09); }
 
-/* 状态 chip：柔色胶囊 */
 .status-chip {
-  font-size: 11px; padding: 2px 10px; border-radius: 999px;
+  font-size: 10.5px; padding: 2px 9px; border-radius: 6px;
   background: var(--chip); color: var(--ink2); white-space: nowrap;
 }
 .status-chip.st-dispatched { color: var(--ink2); }
-.status-chip.st-working { color: var(--ink2); background: var(--chip); }
+.status-chip.st-working { color: var(--acc); background: var(--acc-tint); }
 .status-chip.st-reported { color: var(--warn); background: rgba(154,114,53,.09); }
 .status-chip.st-approved { color: var(--ink2); background: var(--chip); }
 .status-chip.st-rejected { color: var(--bad); background: rgba(168,92,85,.09); }
 .status-chip.st-published { color: var(--ink2); background: var(--chip); }
 .status-chip.st-failed { color: var(--bad); background: rgba(168,92,85,.09); }
 
-/* ---------------- 撰写条：一体式容器（Claude 式） ---------------- */
-#composer { padding: 10px 30px 22px; position: relative; }
+/* 内联预览（文件链接点开） */
+.link { color: var(--acc); cursor: pointer; }
+.doc-title.link:hover, .task-row .t-title.link:hover {
+  text-decoration: underline; text-underline-offset: 3px; text-decoration-color: rgba(53,104,173,.45);
+}
+.chev { color: var(--mut); font-size: 10px; flex: none; cursor: pointer; transition: transform .16s ease; padding: 0 2px; user-select: none; }
+.chev.open { transform: rotate(90deg); color: var(--acc); }
+.doc-preview, .task-preview { border-top: 1px solid var(--line); margin-top: 4px; padding-top: 11px; animation: pv-in .18s ease; }
+.task-preview { margin: 2px 0 6px; padding: 11px 14px; background: var(--paper); border: 1px solid var(--line); border-top: 1px solid var(--line); border-radius: var(--r-sm); }
+.doc-preview { padding-bottom: 8px; }
+.pv-meta { font: 400 11px var(--mono); color: var(--mut); margin-bottom: 2px; }
+.pv-sec { font-size: 10.5px; font-weight: 600; color: var(--faint); letter-spacing: .07em; margin: 11px 0 4px; }
+.pv-report { max-height: 40vh; }
+.task-preview .digest {
+  font-size: 12.5px; line-height: 1.7; color: var(--ink2); background: var(--card);
+  border: 1px solid var(--line); border-radius: var(--r-sm); padding: 10px 14px; margin: 6px 0;
+  max-height: 200px; overflow-y: auto; white-space: pre-wrap;
+}
+.task-preview .digest b { color: var(--ink); font-weight: 600; }
+.task-preview .digest .md-h { display: block; font-weight: 700; color: var(--ink); margin: 10px 0 3px; }
+.task-preview .digest code { font-family: var(--mono); font-size: .92em; background: rgba(38,41,46,.06); padding: 1px 5px; border-radius: 4px; }
+.task-preview .digest .md-li { display: block; padding-left: 13px; text-indent: -13px; }
+.task-preview .digest .md-li::before { content: '· '; color: var(--mut); }
+.doc .digest .md-h { display: block; font-weight: 700; color: var(--ink); margin: 10px 0 3px; }
+.doc .digest .md-h:first-child { margin-top: 0; }
+.doc .digest code { font-family: var(--mono); font-size: .92em; background: rgba(38,41,46,.06); padding: 1px 5px; border-radius: 4px; }
+.doc .digest .md-li { display: block; padding-left: 13px; text-indent: -13px; }
+.doc .digest .md-li::before { content: '· '; color: var(--mut); }
+@keyframes pv-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+
+/* ---------------- 撰写区（Claude Code 高输入框 + 内嵌工具条） ---------------- */
+#composer { position: relative; padding: 6px 26px 10px; }
+.scroll-fab {
+  position: absolute; top: -20px; left: 50%; transform: translateX(-50%);
+  width: 28px; height: 28px; border-radius: 50%;
+  background: var(--card); border: 1px solid var(--line2); color: var(--ink2);
+  box-shadow: 0 3px 10px rgba(38,41,46,.08); font-size: 13px;
+  display: none; z-index: 20;
+}
+.scroll-fab.show { display: block; }
+.scroll-fab:hover { color: var(--acc); border-color: var(--acc); }
 .composer-box {
-  display: flex; align-items: flex-end; gap: 10px;
   background: var(--card); border: 1px solid var(--line2); border-radius: var(--r-xl);
-  padding: 8px 8px 8px 20px;
-  box-shadow: 0 2px 10px rgba(36,48,63,.04);
-  transition: .12s;
+  padding: 12px 14px 10px; transition: .12s;
+  box-shadow: 0 2px 10px rgba(38,41,46,.04);
 }
 .composer-box:focus-within { border-color: var(--acc); box-shadow: 0 0 0 3px rgba(53,104,173,.10); }
 #input {
-  flex: 1; resize: none; max-height: 140px; border: none; background: transparent;
-  border-radius: 0; padding: 9px 0; box-shadow: none;
+  width: 100%; resize: none; max-height: 160px; border: none; background: transparent;
+  border-radius: 0; padding: 0 2px 10px; box-shadow: none; font-size: 14.5px; line-height: 1.65;
 }
 #input:focus { border: none; box-shadow: none; }
-.composer-box .btn { padding: 9px 20px; flex: none; }
-#popup {
-  position: absolute; bottom: 100%; left: 30px; background: var(--card); border: 1px solid var(--line2);
-  border-radius: var(--r-md); padding: 5px; max-height: 220px; overflow-y: auto; min-width: 250px; z-index: 30;
-  box-shadow: 0 12px 32px rgba(36,48,63,.10);
+.composer-bar { display: flex; justify-content: space-between; align-items: center; }
+.bar-left, .bar-right { display: flex; align-items: center; gap: 6px; }
+.tb-chip {
+  padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line2);
+  font-size: 12px; color: var(--ink2); background: var(--card);
 }
-#popup .item { padding: 6px 12px; border-radius: var(--r-sm); cursor: pointer; font-size: 13.5px; color: var(--ink2); display: flex; justify-content: space-between; gap: 10px; }
+.tb-chip:hover { border-color: var(--acc); color: var(--acc); }
+.tb-hint { font-size: 11px; color: var(--faint); margin-left: 6px; }
+.send-fab {
+  width: 30px; height: 30px; border-radius: 50%;
+  background: var(--acc); color: #fff; font-size: 14px; line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+}
+.send-fab:hover { background: var(--acc-hi); }
+.composer-foot { text-align: center; font-size: 10.5px; color: var(--faint); padding: 8px 0 2px; }
+#popup {
+  position: absolute; bottom: 100%; left: 26px; background: var(--card); border: 1px solid var(--line2);
+  border-radius: var(--r-md); padding: 4px; max-height: 220px; overflow-y: auto; min-width: 250px; z-index: 30;
+  box-shadow: 0 12px 32px rgba(38,41,46,.10);
+}
+#popup .item { padding: 6px 12px; border-radius: var(--r-sm); cursor: pointer; font-size: 13px; color: var(--ink2); display: flex; justify-content: space-between; gap: 10px; }
 #popup .item:hover, #popup .item.sel { background: var(--paper); color: var(--ink); }
-#popup .item small { color: var(--mut); font-size: 11px; }
+#popup .item small { color: var(--faint); font-size: 10.5px; }
 
-/* ---------------- 任务板 ---------------- */
-#panel { width: 356px; min-width: 356px; background: var(--paper); border-left: 1px solid var(--line); display: flex; flex-direction: column; }
-.panel-head { display: flex; justify-content: space-between; align-items: center; padding: 16px 18px 12px; }
-.panel-title { font-family: var(--serif); font-weight: 700; font-size: 17px; }
-.pipeline { padding: 0 18px 14px; font-size: 12.5px; color: var(--mut); }
-.pipeline b { font-weight: 600; color: var(--ink2); }
-.pipeline .hot b { color: var(--warn); }
-.tabs { display: flex; gap: 2px; padding: 0 14px; border-bottom: 1px solid var(--line); }
-.tabs button { padding: 8px 14px; font-size: 13.5px; color: var(--mut); border-bottom: 2px solid transparent; border-radius: var(--r-sm) var(--r-sm) 0 0; }
+/* ---------------- 右侧任务面板（Claude Code 式） ---------------- */
+#panel { width: 340px; min-width: 340px; background: var(--paper); border-left: 1px solid var(--line); display: flex; flex-direction: column; }
+.panel-head { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px 8px; }
+.panel-title { font-size: 14px; font-weight: 700; }
+.panel-scroll { flex: 1; overflow-y: auto; display: flex; flex-direction: column; }
+.psec-head {
+  display: flex; align-items: center; gap: 7px; padding: 10px 16px 6px;
+  font-size: 12px; font-weight: 600; color: var(--ink2); cursor: default;
+}
+.psec-head .chev { pointer-events: none; }
+.pipeline { padding: 0 16px 8px; font-size: 12px; color: var(--faint); }
+.pipeline b { font-weight: 600; color: var(--mut); }
+.pipeline .hot b { color: var(--acc); }
+.pipeline .sep { margin: 0 7px; color: var(--line2); }
+
+/* Progress 步骤清单（✓✓③○） */
+#missionSteps { padding: 2px 16px 10px; }
+.ms-row { display: flex; gap: 10px; align-items: flex-start; padding: 3px 0; position: relative; }
+.ms-icon {
+  width: 18px; height: 18px; border-radius: 50%; flex: none; margin-top: 2px;
+  display: flex; align-items: center; justify-content: center;
+  font: 600 10px var(--mono); color: #fff; background: var(--acc);
+}
+.ms-icon.done { background: var(--acc); }
+.ms-icon.todo { background: transparent; border: 1.5px solid var(--line2); color: var(--faint); }
+.ms-icon.fail { background: var(--bad); }
+.ms-body { flex: 1; min-width: 0; }
+.ms-title { font-size: 12.5px; color: var(--ink2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+.ms-title.done { color: var(--faint); }
+.ms-title:hover { color: var(--acc); }
+.ms-meta { font: 400 10.5px var(--mono); color: var(--faint); }
+#missionSteps .task-preview { margin: 2px 0 6px 28px; }
+
+.tabs { display: flex; gap: 2px; padding: 0 12px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.tabs button { padding: 7px 12px; font-size: 12.5px; color: var(--mut); border-bottom: 2px solid transparent; }
 .tabs button:hover { color: var(--ink); }
 .tabs button.on { color: var(--ink); font-weight: 600; border-bottom-color: var(--acc); }
-.panel-body { flex: 1; overflow-y: auto; padding: 16px 14px 24px; }
+.panel-body { flex: 1; overflow-y: auto; padding: 12px 12px 20px; }
 
-.mission-card { background: var(--card); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 16px 18px; margin-bottom: 14px; box-shadow: 0 1px 3px rgba(36,48,63,.03); }
-.mc-head { display: flex; align-items: center; gap: 10px; margin-bottom: 7px; }
-.mc-head .m-title { font-family: var(--serif); font-weight: 700; font-size: 16px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.m-meta { font-size: 12px; color: var(--mut); }
-.pbar { height: 4px; border-radius: 2px; background: var(--chip); overflow: hidden; margin: 10px 0 5px; }
+.mission-card { background: var(--card); border: 1px solid var(--line2); border-radius: var(--r-md); padding: 13px 15px; margin-bottom: 10px; }
+.mc-head { display: flex; align-items: center; gap: 9px; margin-bottom: 6px; }
+.mc-head .m-title { font-size: 14px; font-weight: 700; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.m-meta { font: 400 11px var(--mono); color: var(--faint); }
+.pbar { height: 3px; border-radius: 2px; background: var(--chip); overflow: hidden; margin: 8px 0 4px; }
 .pbar > div { height: 100%; border-radius: 2px; background: var(--acc); }
-.task-row { display: flex; gap: 8px; align-items: center; font-size: 13px; padding: 8px 0; border-top: 1px solid var(--line); cursor: pointer; color: var(--ink2); }
+.task-row { display: flex; gap: 8px; align-items: center; font-size: 12.5px; padding: 7px 0; border-top: 1px solid var(--line); cursor: pointer; color: var(--ink2); }
 .task-row:hover { color: var(--ink); }
 .task-row .t-title { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.mc-actions { display: flex; gap: 8px; padding-top: 12px; }
+.mc-actions { display: flex; gap: 7px; padding-top: 10px; }
 
-.empty { color: var(--mut); font-size: 13px; text-align: center; padding: 44px 10px; }
+.empty { color: var(--faint); font-size: 12px; text-align: center; padding: 36px 10px; }
 
-/* ---------------- 按钮：胶囊 ---------------- */
+/* ---------------- 按钮：小圆角（Claude Code 的按钮不是胶囊） ---------------- */
 .btn {
-  border-radius: 999px; padding: 8px 18px; font-size: 13.5px; font-weight: 500;
+  border-radius: var(--r-sm); padding: 7px 14px; font-size: 13px; font-weight: 500;
   border: 1px solid var(--line2); background: var(--card); color: var(--ink2); transition: .12s;
 }
 .btn:hover { border-color: var(--mut); color: var(--ink); }
 .btn.primary { background: var(--acc); border-color: var(--acc); color: #fff; }
 .btn.primary:hover { background: var(--acc-hi); }
-.btn.ok { background: var(--ok); border-color: var(--ok); color: #fff; }
-.btn.ok:hover { filter: brightness(.95); }
+.btn.ok { background: var(--acc); border-color: var(--acc); color: #fff; }
+.btn.ok:hover { background: var(--acc-hi); }
 .btn.bad { background: var(--card); border-color: rgba(168,92,85,.4); color: var(--bad); }
 .btn.bad:hover { background: rgba(168,92,85,.06); }
 .btn.ghost { background: transparent; border-color: transparent; color: var(--ink2); }
-.btn.ghost:hover { background: rgba(36,48,63,.05); color: var(--ink); }
+.btn.ghost:hover { background: rgba(38,41,46,.05); color: var(--ink); }
 
-/* 类别章变体（脱离 .doc 上下文时） */
+/* 类别章变体 */
 .k.v-acc { color: var(--acc); background: var(--acc-tint); }
 .k.v-warn { color: var(--warn); background: rgba(154,114,53,.09); }
 .k.v-ink { color: var(--ink2); background: var(--chip); }
 .k.v-mut { color: var(--mut); background: var(--chip); }
-.pipeline .sep { margin: 0 8px; color: var(--line2); }
 
 /* ---------------- 模态 ---------------- */
-.modal-mask { position: fixed; inset: 0; background: rgba(36,48,63,.34); display: flex; align-items: center; justify-content: center; z-index: 100; }
+.modal-mask { position: fixed; inset: 0; background: rgba(38,41,46,.34); display: flex; align-items: center; justify-content: center; z-index: 100; }
 .modal {
   width: min(560px, 92vw); max-height: 86vh; overflow-y: auto;
-  background: var(--card); border-radius: var(--r-xl); padding: 26px 28px;
-  box-shadow: 0 24px 64px rgba(36,48,63,.16);
+  background: var(--card); border-radius: var(--r-lg); padding: 22px 24px;
+  box-shadow: 0 24px 64px rgba(38,41,46,.16);
 }
-.modal h2 { margin-bottom: 6px; font-family: var(--serif); font-size: 20px; }
-.modal .hint { color: var(--mut); font-size: 13px; margin-bottom: 14px; }
-.modal .digest { overflow-y: auto; overflow-wrap: anywhere; white-space: pre-wrap; }
-.modal label { display: block; font-size: 12.5px; font-weight: 600; color: var(--ink2); margin: 15px 0 6px; }
+.modal h2 { margin-bottom: 6px; font-size: 17px; font-weight: 700; }
+.modal .hint { color: var(--mut); font-size: 12.5px; margin-bottom: 12px; }
+.modal label { display: block; font-size: 12px; font-weight: 600; color: var(--ink2); margin: 13px 0 5px; }
 .modal input, .modal textarea, .modal select { width: 100%; }
-.modal textarea { min-height: 76px; resize: vertical; }
-.modal .form-row { display: flex; gap: 10px; margin-top: 15px; }
+.modal textarea { min-height: 72px; resize: vertical; }
+.modal .form-row { display: flex; gap: 10px; margin-top: 13px; }
 .modal .form-row > * { flex: 1; }
-.modal .foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 22px; }
+.modal .foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
 .chip-select { display: flex; flex-wrap: wrap; gap: 6px; }
 .chip-select .chip {
-  padding: 5px 13px; border-radius: 999px; border: 1px solid var(--line2); font-size: 13px;
+  padding: 4px 12px; border-radius: var(--r-sm); border: 1px solid var(--line2); font-size: 12.5px;
   cursor: pointer; color: var(--mut); background: var(--card);
 }
 .chip-select .chip.on { color: var(--acc); border-color: var(--acc); background: var(--acc-tint); }
 
 #toast {
   position: fixed; left: 50%; bottom: 30px; transform: translateX(-50%);
-  background: var(--ink); color: #f0f4f9; padding: 10px 22px; border-radius: 999px; z-index: 200;
-  max-width: 70vw; font-size: 13.5px;
+  background: var(--ink); color: #f0f3f7; padding: 9px 20px; border-radius: var(--r-sm); z-index: 200;
+  max-width: 70vw; font-size: 13px;
 }
 #toast.err { background: var(--bad); }
 
 /* ---------------- 登录闸门 ---------------- */
-.gate { position: fixed; inset: 0; z-index: 90; display: flex; align-items: center; justify-content: center; background: var(--panel); }
-.gate-inner { display: flex; gap: 68px; align-items: center; padding: 24px; max-width: 840px; }
+.gate { position: fixed; inset: 0; z-index: 90; display: flex; align-items: center; justify-content: center; background: var(--paper); }
+.gate-inner { display: flex; gap: 64px; align-items: center; padding: 24px; max-width: 840px; }
 .gate-brand { max-width: 300px; }
-.logo-lg { width: 42px; height: 42px; border-radius: 50%; background: var(--acc); margin-bottom: 22px; }
-.gate-brand h1 { font-family: var(--serif); font-size: 42px; }
-.gate-tag { font-size: 11px; letter-spacing: .24em; color: var(--acc); font-weight: 600; margin: 8px 0 18px; }
-.gate-desc { font-size: 14px; color: var(--ink2); line-height: 2.1; }
-.gate-ver { font-size: 11px; color: var(--mut); margin-top: 26px; }
-.gate-card { width: 344px; background: var(--card); border-radius: var(--r-xl); box-shadow: 0 24px 64px rgba(36,48,63,.10); padding: 24px; }
-.gate-card-head { font-family: var(--serif); font-weight: 700; font-size: 17px; margin-bottom: 2px; }
+.logo-lg { width: 40px; height: 40px; border-radius: 50%; background: var(--acc); margin-bottom: 20px; }
+.gate-brand h1 { font-size: 40px; font-weight: 700; }
+.gate-tag { font-size: 11px; letter-spacing: .24em; color: var(--acc); font-weight: 600; margin: 8px 0 16px; }
+.gate-desc { font-size: 13.5px; color: var(--ink2); line-height: 2; }
+.gate-ver { font: 400 10.5px var(--mono); color: var(--faint); margin-top: 24px; }
+.gate-card { width: 344px; background: var(--card); border: 1px solid var(--line2); border-radius: var(--r-lg); box-shadow: 0 24px 64px rgba(38,41,46,.08); padding: 22px; }
+.gate-card-head { font-size: 16px; font-weight: 700; margin-bottom: 2px; }
 .gate-hint { font-size: 12px; color: var(--mut); margin-bottom: 10px; }
 .gate-quick { list-style: none; }
-.gate-quick li {
-  display: flex; align-items: center; gap: 10px; padding: 11px 13px; margin: 2px 0;
-  border-radius: var(--r-md); cursor: pointer;
-}
+.gate-quick li { display: flex; align-items: center; gap: 10px; padding: 10px 12px; margin: 2px 0; border-radius: var(--r-sm); cursor: pointer; }
 .gate-quick li:hover { background: var(--paper); }
-.gate-quick li b { font-size: 14px; flex: none; width: 40px; }
-.gate-quick li span { flex: 1; font-size: 11.5px; color: var(--mut); }
-.gate-quick li i { font-size: 13.5px; color: var(--acc); font-style: normal; opacity: 0; }
+.gate-quick li b { font-size: 13.5px; flex: none; width: 40px; }
+.gate-quick li span { flex: 1; font-size: 11px; color: var(--mut); }
+.gate-quick li i { font-size: 13px; color: var(--acc); font-style: normal; opacity: 0; }
 .gate-quick li:hover i { opacity: 1; }
-.gate-form { display: flex; gap: 8px; padding: 13px 0 2px; }
+.gate-form { display: flex; gap: 8px; padding: 12px 0 2px; }
 .gate-form input { flex: 1; min-width: 0; }
 
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #d5dbe4; border: 3px solid transparent; background-clip: content-box; border-radius: 8px; }
-::-webkit-scrollbar-thumb:hover { background: #c0c8d4; border: 3px solid transparent; background-clip: content-box; }
-/* Calculation evidence stays collapsed until the researcher needs to verify it. */
-.evidence { margin-top: 16px; padding: 12px; border: 1px solid var(--line); border-radius: var(--r-sm); }
-.evidence summary { cursor: pointer; font-weight: 600; }
-.evidence p { margin: 8px 0; overflow-wrap: anywhere; }
-.evidence .digest { max-height: 36vh; overflow-y: auto; }
+::-webkit-scrollbar-thumb { background: #d6dae1; border: 3px solid transparent; background-clip: content-box; border-radius: 8px; }
+::-webkit-scrollbar-thumb:hover { background: #c2c7d0; border: 3px solid transparent; background-clip: content-box; }
 
-/* ---------------- 内联预览（学 Claude Code：文件链接点开原地展开） ---------------- */
-.link { color: var(--acc); cursor: pointer; }
-.doc-title.link:hover, .task-row .t-title.link:hover {
-  text-decoration: underline; text-underline-offset: 3px; text-decoration-color: rgba(53,104,173,.4);
-}
-.chev {
-  color: var(--mut); font-size: 10px; flex: none; cursor: pointer;
-  transition: transform .16s ease; padding: 0 2px; user-select: none;
-}
-.chev.open { transform: rotate(90deg); color: var(--acc); }
-.doc-preview, .task-preview {
-  border-top: 1px dashed var(--line);
-  margin-top: 4px; padding-top: 12px;
-  animation: pv-in .18s ease;
-}
-.task-preview { margin: 2px 0 6px; padding: 12px 14px; background: var(--paper); border-radius: var(--r-sm); border-top: none; }
-.doc-preview { padding-bottom: 8px; }
-.pv-meta { font-size: 11.5px; color: var(--mut); margin-bottom: 2px; }
-.pv-sec { font-size: 10.5px; font-weight: 600; color: var(--mut); letter-spacing: .08em; margin: 12px 0 4px; }
-.pv-report { max-height: 40vh; }
-/* 任务板行内预览里的 digest（.doc 外上下文）复刻文档卡样式 */
-.task-preview .digest {
-  font-size: 12.5px; line-height: 1.7; color: var(--ink2); background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: var(--r-sm); padding: 10px 14px; margin: 6px 0;
-  max-height: 200px; overflow-y: auto; white-space: pre-wrap;
-}
-.task-preview .digest b { color: var(--ink); font-weight: 600; }
-.task-preview .digest .md-h { display: block; font-family: var(--serif); font-weight: 700; color: var(--ink); margin: 10px 0 3px; }
-.task-preview .digest .md-h:first-child { margin-top: 0; }
-.task-preview .digest code { font-family: var(--mono); font-size: .92em; background: rgba(36,48,63,.06); padding: 1px 6px; border-radius: 5px; color: var(--ink); }
-.task-preview .digest .md-li { display: block; padding-left: 14px; text-indent: -14px; }
-.task-preview .digest .md-li::before { content: '· '; color: var(--mut); }
-@keyframes pv-in {
-  from { opacity: 0; transform: translateY(-4px); }
-  to   { opacity: 1; transform: none; }
-}
+/* 分段控制（Claude Code 的 Home/Code） */
+.seg { display: flex; gap: 4px; background: var(--chip); border-radius: var(--r-sm); padding: 3px; margin-bottom: 10px; }
+.seg-btn { flex: 1; padding: 5px 0; border-radius: 6px; font-size: 12.5px; font-weight: 500; color: var(--mut); }
+.seg-btn.on { background: var(--card); color: var(--ink); font-weight: 600; box-shadow: 0 1px 2px rgba(38,41,46,.06); }
+/* 状态行紧凑化 */
+.side-stats { font-size: 10.5px; }

@@ -37,66 +37,94 @@
   </div>
 
   <div id="app" class="hidden">
-    <!-- Claude 式布局：无顶栏，左侧栏 + 主区（+可开任务板） -->
     <div id="workspace">
+      <!-- Claude Code 式左侧栏 -->
       <aside id="sidebar">
         <div class="sb-top">
-          <div class="brand">
-            <span class="logo"></span>
-            <span class="brand-name">SciTag</span>
+          <div class="seg">
+            <button class="seg-btn on" data-seg="talk">会话</button>
+            <button class="seg-btn" data-seg="crew">乘组</button>
           </div>
-          <button id="btnNewMission" class="btn primary btn-block">开始新课题</button>
+          <div class="brand"><span class="logo"></span><span class="brand-name">SciTag</span></div>
+          <nav class="sb-menu">
+            <button id="btnNewMission" class="sb-menu-row"><i class="glyph">＋</i>新课题</button>
+            <button id="btnPanel" class="sb-menu-row"><i class="glyph">▤</i>任务板</button>
+            <button id="btnDomains" class="sb-menu-row"><i class="glyph">◱</i>域包</button>
+            <button id="btnAddAgent" class="sb-menu-row"><i class="glyph">✚</i>接入 agent</button>
+          </nav>
         </div>
         <div class="side-scroll">
           <section class="side-sec">
-            <div class="side-sec-head"><span>会话</span></div>
+            <div class="side-sec-head"><span>Pinned · 课题组群</span></div>
             <ul id="channelList" class="side-list"></ul>
           </section>
           <section class="side-sec">
-            <div class="side-sec-head"><span>成员</span><button id="btnAddAgent" class="mini" title="接入新 agent">＋</button></div>
+            <div class="side-sec-head"><span>Ungrouped · 私聊</span></div>
+            <ul id="dmList" class="side-list"></ul>
+          </section>
+          <section class="side-sec">
+            <div class="side-sec-head"><span>Members · 成员</span></div>
             <ul id="rosterList" class="manifest"></ul>
           </section>
         </div>
         <div class="side-foot">
           <div id="liveStats" class="side-stats" title="平台实时指标"></div>
-          <div id="domainsInfo" class="side-domains"></div>
           <div class="me-card" id="meCard"></div>
         </div>
       </aside>
 
+      <!-- 主区 -->
       <main id="main">
         <header id="chatHead">
           <div class="chat-head-txt">
-            <div id="chatTitle">—</div>
+            <div id="chatTitle"><span id="chatTitleTxt">—</span> <span class="chev-title">▾</span></div>
             <div id="chatSub"></div>
           </div>
           <div class="chat-head-actions">
             <span id="chatMeta" class="chat-meta"></span>
-            <button id="btnPanel" class="btn ghost">任务板</button>
           </div>
         </header>
         <div id="msgList"></div>
         <div id="composer">
           <div id="popup" class="hidden"></div>
+          <button id="scrollDown" class="scroll-fab" title="回到底部">↓</button>
           <div class="composer-box">
-            <textarea id="input" rows="1" placeholder="发言 · @成员 派活或讨论 · #技能名 点名外挂 · Enter 发送"></textarea>
-            <button id="btnSend" class="btn primary">发送</button>
+            <textarea id="input" rows="2" placeholder="发消息给课题组…"></textarea>
+            <div class="composer-bar">
+              <div class="bar-left">
+                <button id="tbAt" class="tb-chip" title="提及成员">＠</button>
+                <button id="tbSkill" class="tb-chip" title="点名技能">#</button>
+                <span class="tb-hint">Enter 发送 · Shift+Enter 换行</span>
+              </div>
+              <div class="bar-right">
+                <button id="tbDomain" class="tb-chip"><span id="tbDomainName">bone-scaffold</span> ▾</button>
+                <button id="btnSend" class="send-fab" title="发送">↑</button>
+              </div>
+            </div>
           </div>
+          <p class="composer-foot">SciTag 是多智能体科研系统 · 成果须经主人审阅后回群 · 请复核关键数据</p>
         </div>
       </main>
 
+      <!-- Claude Code 式右侧任务面板 -->
       <aside id="panel" class="hidden">
         <header class="panel-head">
           <span class="panel-title">任务板</span>
           <button id="btnClosePanel" class="mini">×</button>
         </header>
-        <div id="pipeline" class="pipeline"></div>
-        <div class="tabs">
-          <button data-tab="missions" class="on">课题</button>
-          <button data-tab="reviews">待我审</button>
-          <button data-tab="domains">域包</button>
+        <div class="panel-scroll">
+          <section class="psec">
+            <div class="psec-head open"><i class="chev">▾</i>Progress · 任务进度</div>
+            <div id="pipeline" class="pipeline"></div>
+            <div id="missionSteps"></div>
+          </section>
+          <div class="tabs">
+            <button data-tab="missions" class="on">课题</button>
+            <button data-tab="reviews">待我审</button>
+            <button data-tab="domains">域包</button>
+          </div>
+          <div id="panelBody" class="panel-body"></div>
         </div>
-        <div id="panelBody" class="panel-body"></div>
       </aside>
     </div>
   </div>
