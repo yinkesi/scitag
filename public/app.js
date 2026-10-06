@@ -87,6 +87,62 @@ async function refreshState() {
 function agentOf(name) { return S.agents.find((a) => a.name === name); }
 function taskById(id) { for (const m of S.missions) { const t = m.tasks.find((x) => x.id === id); if (t) return t; } return null; }
 
+/* ---------------- 内联预览（学 Claude Code：点开文件链接原地展开内容） ---------------- */
+
+const fullTaskCache = {}; // taskId -> 完整任务（含全文报告）
+async function fetchFullTask(id) {
+  if (fullTaskCache[id]) return fullTaskCache[id];
+  const j = await api('/api/tasks/' + encodeURIComponent(id));
+  fullTaskCache[id] = j.task;
+  return j.task;
+}
+
+function previewHtml(t) {
+  return `<div class="pv-meta">${esc(t.badge)} · ${esc(t.assignee)} → ${esc(t.owner)} · R${t.attempts}</div>` +
+    `<div class="pv-sec">任务书</div><div class="digest">${md(t.brief)}</div>` +
+    `<div class="pv-sec">成果全文</div><div class="digest pv-report">${md(t.report || '（尚无成果）')}</div>` +
+    (t.review ? `<div class="pv-sec">最近审阅</div><div class="digest">${esc(t.review.decision)}：${md(t.review.comment || '')}</div>` : '');
+}
+
+async function fillPreview(pv, taskId) {
+  pv.textContent = '加载中…';
+  try { pv.innerHTML = previewHtml(await fetchFullTask(taskId)); }
+  catch (e) { pv.textContent = '加载失败：' + e.message; }
+}
+
+/** 文档卡：标题变成可点开的链接，点击原地展开全文预览 */
+function makeExpandable(box, taskId) {
+  const title = box.querySelector('.doc-title');
+  if (!title) return;
+  title.classList.add('link');
+  title.title = '点击展开 / 收起全文';
+  const ch = document.createElement('span');
+  ch.className = 'chev';
+  ch.textContent = '▸';
+  title.insertAdjacentElement('afterend', ch);
+  const toggle = () => {
+    let pv = box.querySelector('.doc-preview');
+    if (pv) { pv.remove(); ch.classList.remove('open'); return; }
+    ch.classList.add('open');
+    pv = document.createElement('div');
+    pv.className = 'doc-preview';
+    box.appendChild(pv);
+    fillPreview(pv, taskId);
+  };
+  title.onclick = toggle;
+  ch.onclick = toggle;
+}
+
+/** 任务板行：点击行原地展开（全局暴露给模板 onclick） */
+window.toggleTaskPreview = async (rowEl, id) => {
+  let pv = rowEl.nextElementSibling;
+  if (pv && pv.classList.contains('task-preview')) { pv.remove(); return; }
+  pv = document.createElement('div');
+  pv.className = 'task-preview';
+  rowEl.after(pv);
+  fillPreview(pv, id);
+};
+
 /* ---------------- 仪器条 ---------------- */
 
 function renderStats(jobs) {
@@ -285,6 +341,7 @@ function renderDoc(m) {
   } else {
     box.innerHTML = head('卡片', c.type || '', 'dispatched', '—');
   }
+  if (c.taskId) makeExpandable(box, c.taskId);
   return box;
 }
 
@@ -422,7 +479,7 @@ function missionCard(m) {
     `<div class="m-meta">领导 ${esc(m.leader)} · ${m.progress.done}/${m.progress.total} 完成</div>` +
     `<div class="pbar"><div style="width:${m.progress.pct}%;${m.progress.pct >= 100 ? 'background:var(--ok)' : ''}"></div></div>` +
     `<div class="m-meta" style="margin-top:2px">${progressLine(m.progress)}</div>` +
-    m.tasks.map((t) => `<div class="task-row" onclick="showReport('${esc(t.id)}')"><span class="status-chip st-${esc(t.status)}">${esc(t.badge)}</span><span class="t-title">${esc(t.title)}</span><span class="badge owner">${esc(t.assignee)}</span></div>`).join('') +
+    m.tasks.map((t) => `<div class="task-row" title="点击展开 / 收起全文" onclick="toggleTaskPreview(this,'${esc(t.id)}')"><span class="status-chip st-${esc(t.status)}">${esc(t.badge)}</span><span class="t-title link">${esc(t.title)}</span><span class="badge owner">${esc(t.assignee)}</span></div>`).join('') +
     `</div>`;
   if (isLeader && m.status === 'open') {
     const acts = document.createElement('div');

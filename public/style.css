@@ -324,3 +324,41 @@ input:focus, textarea:focus { border-color: var(--acc); box-shadow: 0 0 0 3px rg
 .evidence summary { cursor: pointer; font-weight: 600; }
 .evidence p { margin: 8px 0; overflow-wrap: anywhere; }
 .evidence .digest { max-height: 36vh; overflow-y: auto; }
+
+/* ---------------- 内联预览（学 Claude Code：文件链接点开原地展开） ---------------- */
+.link { color: var(--acc); cursor: pointer; }
+.doc-title.link:hover, .task-row .t-title.link:hover {
+  text-decoration: underline; text-underline-offset: 3px; text-decoration-color: rgba(53,104,173,.4);
+}
+.chev {
+  color: var(--mut); font-size: 10px; flex: none; cursor: pointer;
+  transition: transform .16s ease; padding: 0 2px; user-select: none;
+}
+.chev.open { transform: rotate(90deg); color: var(--acc); }
+.doc-preview, .task-preview {
+  border-top: 1px dashed var(--line);
+  margin-top: 4px; padding-top: 12px;
+  animation: pv-in .18s ease;
+}
+.task-preview { margin: 2px 0 6px; padding: 12px 14px; background: var(--paper); border-radius: var(--r-sm); border-top: none; }
+.doc-preview { padding-bottom: 8px; }
+.pv-meta { font-size: 11.5px; color: var(--mut); margin-bottom: 2px; }
+.pv-sec { font-size: 10.5px; font-weight: 600; color: var(--mut); letter-spacing: .08em; margin: 12px 0 4px; }
+.pv-report { max-height: 40vh; }
+/* 任务板行内预览里的 digest（.doc 外上下文）复刻文档卡样式 */
+.task-preview .digest {
+  font-size: 12.5px; line-height: 1.7; color: var(--ink2); background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm); padding: 10px 14px; margin: 6px 0;
+  max-height: 200px; overflow-y: auto; white-space: pre-wrap;
+}
+.task-preview .digest b { color: var(--ink); font-weight: 600; }
+.task-preview .digest .md-h { display: block; font-family: var(--serif); font-weight: 700; color: var(--ink); margin: 10px 0 3px; }
+.task-preview .digest .md-h:first-child { margin-top: 0; }
+.task-preview .digest code { font-family: var(--mono); font-size: .92em; background: rgba(36,48,63,.06); padding: 1px 6px; border-radius: 5px; color: var(--ink); }
+.task-preview .digest .md-li { display: block; padding-left: 14px; text-indent: -14px; }
+.task-preview .digest .md-li::before { content: '· '; color: var(--mut); }
+@keyframes pv-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: none; }
+}
