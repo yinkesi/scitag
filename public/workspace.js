@@ -29,6 +29,8 @@ function setPanelOpen(open) {
   $('btnTogglePanel').setAttribute('aria-label', open ? '收起工作面板' : '展开工作面板');
 }
 function openProjectPanel(tab = 'missions') {
+  $('workspace').classList.remove('sidebar-open');
+  $('sidebarBackdrop').classList.add('hidden');
   setPanelOpen(true); $('projectPanel').classList.remove('hidden');
   document.querySelector(`.tabs button[data-tab="${tab}"]`)?.click();
   $('projectPanel').scrollIntoView({ block: 'nearest' });
@@ -52,6 +54,12 @@ function renderProjectTree() {
     button.title = mission.title; button.onclick = () => { openProjectPanel(); showMission(mission.id); };
     li.appendChild(button); list.appendChild(li);
   }
+}
+function currentMissions() {
+  const channel = S.channels.find(c => c.id === S.cur);
+  if (!channel || channel.type === 'group') return S.missions.filter(m => m.channel === S.cur);
+  const partner = channel.members.find(name => name !== S.me.name);
+  return S.missions.map(m => ({ ...m, tasks: m.tasks.filter(t => t.assignee === partner || t.owner === partner) })).filter(m => m.tasks.length);
 }
 function showMission(id) {
   const mission = S.missions.find(m => m.id === id);
@@ -90,7 +98,7 @@ async function renderResources() {
         } catch (error) { toast(error.message, true); }
       }));
     }
-    for (const mission of S.missions.filter(m => m.channel === S.cur)) {
+    for (const mission of currentMissions()) {
       for (const task of mission.tasks.filter(t => t.status === 'published' || (t.owner === S.me.name && t.status === 'reported'))) {
         list.appendChild(resourceRow(task.title, 'REPORT', () => showReport(task.id)));
       }
@@ -150,4 +158,6 @@ function initializeShellUI() {
     else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
   });
   if (matchMedia('(max-width: 1100px)').matches) setPanelOpen(false);
+  matchMedia('(max-width: 1100px)').addEventListener('change', event => setPanelOpen(!event.matches));
+  matchMedia('(max-width: 760px)').addEventListener('change', closeSidebar);
 }

@@ -62,7 +62,8 @@ async function boot() {
   $('gate').classList.add('hidden');
   $('app').classList.remove('hidden');
   await refreshState();
-  const first = S.channels.find((c) => c.type === 'group') || S.channels[0];
+  const preferred = sessionStorage.getItem('scitag_channel');
+  const first = S.channels.find(c => c.id === preferred) || S.channels.find((c) => c.type === 'group') || S.channels[0];
   if (first) await openChannel(first.id);
   connectSSE();
   renderPanel();
@@ -232,6 +233,7 @@ async function openChannel(id, { fromHistory = false } = {}) {
   renderSidebar();
   const j = await api('/api/messages?channel=' + encodeURIComponent(id) + '&limit=100');
   S.msgs[id] = j.messages;
+  sessionStorage.setItem('scitag_channel', id);
   renderMsgs();
   $('msgList').scrollTop = $('msgList').scrollHeight;
   updateNavigation();
@@ -277,13 +279,17 @@ function renderMsg(m) {
     return div;
   }
   const mine = m.from === S.me.name;
+  const channel = S.channels.find(c => c.id === m.channel);
+  const partner = channel?.type === 'dm' ? agentOf(channel.members.find(name => name !== S.me.name)) : null;
+  const prefix = partner?.kind === 'agent' ? '@' + partner.name + ' ' : '';
+  const displayText = mine && prefix && m.text.startsWith(prefix) ? m.text.slice(prefix.length) : m.text;
   div.className = 'msg' + (mine ? ' mine' : '');
   div.innerHTML =
     `<div class="body">` +
     (agentOf(m.from)?.kind === 'agent' ? `<div class="agent-signature"><img src="brand.svg" alt="SciTag"><span>${esc(m.from)}</span></div>` : `<div class="meta"><b>${esc(m.from)}</b><span class="time">${time}</span></div>`) +
-    `<div class="bubble">${highlight(m.text, m.mentions, m.skills)}</div><div class="msg-actions"><span>${time}</span><button class="icon-btn copy-message" aria-label="复制消息" title="复制消息">${icon('copy')}</button></div></div>`;
+    `<div class="bubble">${highlight(displayText, m.mentions, m.skills)}</div><div class="msg-actions"><span>${time}</span><button class="icon-btn copy-message" aria-label="复制消息" title="复制消息">${icon('copy')}</button></div></div>`;
   div.querySelector('.copy-message').onclick = async () => {
-    try { await navigator.clipboard.writeText(m.text); toast('已复制消息'); }
+    try { await navigator.clipboard.writeText(displayText); toast('已复制消息'); }
     catch { toast('浏览器未允许复制，请选择文字复制', true); }
   };
   return div;
@@ -447,7 +453,7 @@ $('scrollDown').onclick = () => { msgListEl.scrollTop = msgListEl.scrollHeight; 
 /** Progress 步骤清单（Claude Code 的 ✓✓③○）：开放课题的任务按状态出步骤行 */
 function renderMissionSteps() {
   const box = $('missionSteps');
-  const open = S.missions.filter((m) => m.status === 'open' && m.channel === S.cur);
+  const open = currentMissions().filter(m => m.status === 'open');
   if (!open.some(m => m.tasks.length)) { box.innerHTML = '<div class="empty">准备就绪，等待派发研究任务</div>'; return; }
   box.innerHTML = '';
   for (const m of open.slice(0, 3)) {
@@ -475,11 +481,9 @@ function renderMissionSteps() {
 
 function renderPipeline() {
   const by = { dispatched: 0, working: 0, reported: 0, published: 0, failed: 0 };
-  for (const m of S.missions) {
-    for (const [k, v] of Object.entries(m.progress.by)) {
-      if (k === 'working' || k === 'rejected') by.working += v;
-      else if (by[k] !== undefined) by[k] += v;
-    }
+  for (const m of currentMissions()) for (const task of m.tasks) {
+    if (task.status === 'working' || task.status === 'rejected') by.working++;
+    else if (by[task.status] !== undefined) by[task.status]++;
   }
   const stages = [
     ['派发', by.dispatched], ['执行', by.working], ['待审', by.reported], ['回群', by.published], ['失败', by.failed],
@@ -777,7 +781,11 @@ async function send() {
   if (!text || !S.cur || sending) return;
   sending = true; updateSendButton(); hidePopup();
   try {
-    const j = await api('/api/messages', { method: 'POST', body: { channel: S.cur, text } });
+    const channel = S.channels.find(c => c.id === S.cur);
+    const partner = channel?.type === 'dm' ? agentOf(channel.members.find(name => name !== S.me.name)) : null;
+    const routedText = S.me.kind === 'human' && partner?.kind === 'agent' && !text.includes('@' + partner.name)
+      ? `@${partner.name} ${text}` : text;
+    const j = await api('/api/messages', { method: 'POST', body: { channel: S.cur, text: routedText } });
     const list = S.msgs[j.message.channel] = S.msgs[j.message.channel] || [];
     if (!list.some(m => m.seq === j.message.seq)) list.push(j.message);
     if (input.value.trim() === text) { input.value = ''; input.style.height = 'auto'; }
