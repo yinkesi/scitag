@@ -1414,7 +1414,7 @@ function lanUrls(port) {
   const out = [];
   for (const list of Object.values(os.networkInterfaces())) {
     for (const ni of list || []) {
-      if (ni.family !== 'IPv4' || ni.internal) continue;
+      if ((ni.family !== 'IPv4' && ni.family !== 4) || ni.internal) continue; // family 在 Node 18.4 前是数字 4
       if (ni.address.startsWith('169.254.')) continue;
       out.push(`http://${ni.address}:${port}`);
     }
