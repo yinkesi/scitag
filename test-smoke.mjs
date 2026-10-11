@@ -162,16 +162,16 @@ let missionId, taskA;
 
   // 权限：非领导不能派活
   const rWang = await api('POST', `/api/missions/${missionId}/tasks`, {
-    token: wang, body: { assignee: '小王', title: '越权任务', brief: 'x' },
+    token: wang, body: { assignee: 'deepseek-harness-deepseekv4', title: '越权任务', brief: 'x' },
   });
   ok(rWang.status === 403, '非领导派活被拒（403）');
 
   // 派活（点名技能）→ echo 干活 → reported
   const rTask = await api('POST', `/api/missions/${missionId}/tasks`, {
     token: prof,
-    body: { assignee: '小王', title: '解释 compliance 随加载角的放大机理', brief: '按研究任务口径 T2：分组统计 compliance 角度趋势并给机理归因。', skills: ['scaffold-explain'] },
+    body: { assignee: 'deepseek-harness-deepseekv4', title: '解释 compliance 随加载角的放大机理', brief: '按研究任务口径 T2：分组统计 compliance 角度趋势并给机理归因。', skills: ['scaffold-explain'] },
   });
-  ok(rTask.status === 200 && ['dispatched', 'working'].includes(rTask.json.task.status), '教授派活给小王（带技能）');
+  ok(rTask.status === 200 && ['dispatched', 'working'].includes(rTask.json.task.status), '教授派活给deepseek-harness-deepseekv4（带技能）');
   taskA = rTask.json.task.id;
 
   const reported = await poll(async () => {
@@ -184,11 +184,11 @@ let missionId, taskA;
   ok(rFull.json.task.report?.includes('scaffold-explain'), '成果里标注了外挂技能（上下文注入生效）');
   ok((rFull.json.task.report?.match(/参考知识库：(.*)/) || [])[1]?.trim() !== '无', '成果引用了 KB 检索结果');
 
-  // 成果落在 owner 私聊（王研↔小王），别人看不见
-  const rDm = await api('GET', '/api/messages?channel=' + encodeURIComponent('dm:小王~王研') + '&limit=20', { token: wang });
+  // 成果落在 owner 私聊（王研↔deepseek-harness-deepseekv4），别人看不见
+  const rDm = await api('GET', '/api/messages?channel=' + encodeURIComponent('dm:deepseek-harness-deepseekv4~王研') + '&limit=20', { token: wang });
   const reviewCard = rDm.json.messages.find((m) => m.card?.type === 'review' && m.card.taskId === taskA);
-  ok(!!reviewCard, '审批卡落在 小王↔王研 私聊');
-  const rPeep = await api('GET', '/api/messages?channel=' + encodeURIComponent('dm:小王~王研') + '&limit=5', { token: li });
+  ok(!!reviewCard, '审批卡落在 deepseek-harness-deepseekv4↔王研 私聊');
+  const rPeep = await api('GET', '/api/messages?channel=' + encodeURIComponent('dm:deepseek-harness-deepseekv4~王研') + '&limit=5', { token: li });
   ok(rPeep.status === 403, '无关者读他人私聊被拒（403）');
 
   // 权限：非主人不能审
@@ -209,7 +209,7 @@ console.log('[L4 工作流：驳回回炉与熔断]');
   const prof = 'demo-jiaoshou', li = 'demo-liyan';
   const rTask = await api('POST', `/api/missions/${missionId}/tasks`, {
     token: prof,
-    body: { assignee: '小李', title: 'compliance 函数建模', brief: '按 T3 口径做基础函数分析。', skills: ['scaffold-model'] },
+    body: { assignee: 'codex-gpt5.6sol', title: 'compliance 函数建模', brief: '按 T3 口径做基础函数分析。', skills: ['scaffold-model'] },
   });
   const tid = rTask.json.task.id;
 
@@ -226,7 +226,7 @@ console.log('[L4 工作流：驳回回炉与熔断]');
 
   // 熔断：两次驳回 → failed + 转人工卡
   const rT3 = await api('POST', `/api/missions/${missionId}/tasks`, {
-    token: prof, body: { assignee: '小王', title: '逆设计演练', brief: 'target 8e-11。' },
+    token: prof, body: { assignee: 'deepseek-harness-deepseekv4', title: '逆设计演练', brief: 'target 8e-11。' },
   });
   const t3 = rT3.json.task.id;
   for (let i = 0; i < 2; i++) {
@@ -266,7 +266,7 @@ console.log('[L4 工作流：外部 runtime 接入（无执行器路径）]');
   });
   ok(rRep.status === 200 && rRep.json.task.status === 'reported', '外部 agent 提交成果 → reported');
 
-  const rBad = await api('POST', `/api/tasks/${tid}/report`, { token: 'demo-xiaoli', body: { text: '冒充' } });
+  const rBad = await api('POST', `/api/tasks/${tid}/report`, { token: 'demo-codex-sol', body: { text: '冒充' } });
   ok(rBad.status === 403, '非 assignee 提交成果被拒（403）');
 
   const rAp = await api('POST', `/api/tasks/${tid}/review`, { token: zhao, body: { decision: 'approve', comment: '外部链路通了' } });

@@ -11,7 +11,7 @@ Node 平台零第三方依赖（Node ≥ 18），无需构建和数据库；换�
 真实骨支架分析另需 Python ≥ 3.8 与 openpyxl，离线演示与外部 agent 接入不需要 Python。
 
 ```
-领导(教授) ──派活──▶ agent(小王) ──带外挂干活──▶ 成果 ──私聊──▶ 主人(王研)
+领导(教授) ──派活──▶ agent(deepseek-v4) ──带外挂干活──▶ 成果 ──私聊──▶ 主人(王研)
     ▲                                                            │审阅
     │                                                            ▼
     └────── 回群交流 ◀── 平台代发（批准后） ◀──────────────── 批准/驳回(带意见回炉)
@@ -35,15 +35,18 @@ Windows 双击 `start.bat`（独立进程 + 打开浏览器）。
 | 身份 | token | 角色 |
 | --- | --- | --- |
 | 教授 | `demo-jiaoshou` | PI，建课题/派活/汇总 |
-| 王研 | `demo-wangyan` | 研究者，小王的主人（审阅人） |
-| 李研 | `demo-liyan` | 研究者，小李的主人 |
-| 小王 / 小李 | `demo-xiaowang` / `demo-xiaoli` | agent，挂 bone-scaffold 域包，echo 执行后端 |
+| 王研 | `demo-wangyan` | 研究者，`deepseek-harness-deepseekv4` 的主人（审阅人） |
+| 李研 | `demo-liyan` | 研究者，`codex-gpt5.6sol` 的主人 |
+| `deepseek-harness-deepseekv4` / `codex-gpt5.6sol` | `demo-deepseekv4` / `demo-codex-sol` | agent，挂 bone-scaffold 域包，echo 执行后端 |
+
+> agent 名用「载体 + 模型」本名，不用拟人化昵称。名字里不放空格：`routing.parseMentions` 的
+> @ 命中与 `dm:<a>~<b>` 频道 id 都以无空白 token 最稳（`@deepseek-harness-deepseekv4`）。
 
 ### 三分钟演示脚本
 
 1. 打开网页，一键登录「教授」→ 任务板 → `＋新课题` 建一个课题。
-2. 课题卡上点「派活」：选 agent（如小王）、写任务书、点名 `#scaffold-explain` 技能。
-3. 小王（echo 后端秒回）产出成果 → 自动落在 **小王↔王研 的私聊**：换登录「王研」
+2. 课题卡上点「派活」：选 agent（如 `deepseek-harness-deepseekv4`）、写任务书、点名 `#scaffold-explain` 技能。
+3. 该 agent（echo 后端秒回）产出成果 → 自动落在 **agent↔王研 的私聊**：换登录「王研」
    能看到待审卡片，「查看全文」后「批准 · 回群」或「驳回 · 重做」（带意见）。
 4. 批准后成果卡回到课题组群并 @教授；登录「教授」在课题卡点「汇总」（可结题）。
 5. 任务板「域包」页可检索知识库（试试搜 `compliance`、`术语`）。

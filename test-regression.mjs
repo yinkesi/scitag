@@ -12,7 +12,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'scitag-regression-'));
-const PI = 'demo-jiaoshou', OWNER = 'demo-wangyan', AGENT = 'demo-xiaowang';
+const PI = 'demo-jiaoshou', OWNER = 'demo-wangyan', AGENT = 'demo-deepseekv4';
 let passed = 0, failed = 0, base, srv;
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 function check(label, condition) {
@@ -119,11 +119,11 @@ try {
 
   await section('私有课题、频道、私聊与直接 @ 隔离', async () => {
     const since = (await api('GET', '/api/state')).json.seq;
-    const channel = await create('/api/channels', { name: 'PRIVATE-CHANNEL-SECRET-392', members: ['王研', '小王', '回归手工agent'], isPublic: false }, PI, 'channel');
+    const channel = await create('/api/channels', { name: 'PRIVATE-CHANNEL-SECRET-392', members: ['王研', 'deepseek-harness-deepseekv4', '回归手工agent'], isPublic: false }, PI, 'channel');
     await create('/api/messages', { channel: channel.id, text: 'PRIVATE-HISTORY-SECRET-392' });
     const privateMission = await create('/api/missions', { title: 'PRIVATE-MISSION-SECRET-392', channel: channel.id }, PI, 'mission');
     const task = await create(`/api/missions/${privateMission.id}/tasks`, { assignee: '回归手工agent', title: 'PRIVATE-TASK-SECRET-392', brief: 'private' }, PI, 'task');
-    const dm = await create('/api/channels', { type: 'dm', dmWith: '小王' }, PI, 'channel');
+    const dm = await create('/api/channels', { type: 'dm', dmWith: 'deepseek-harness-deepseekv4' }, PI, 'channel');
     for (const route of ['/api/state', '/api/missions', '/api/tasks', `/api/events?since=${since}`]) {
       const payload = JSON.stringify((await api('GET', route, outsider.token)).json);
       check(`${route} 不泄露私有课题频道私聊`, ![channel.id, privateMission.id, task.id, dm.id, 'SECRET-392'].some((secret) => payload.includes(secret)));
@@ -142,8 +142,8 @@ try {
   });
 
   await section('执行期必须显示 working', async () => {
-    await create('/api/register', { name: '小王', kind: 'agent', token: AGENT, adapter: { kind: 'echo', options: { delayMs: 900 } } }, null);
-    const task = await create(`/api/missions/${mission.id}/tasks`, { assignee: '小王', title: '慢速执行', brief: 'slow' }, PI, 'task');
+    await create('/api/register', { name: 'deepseek-harness-deepseekv4', kind: 'agent', token: AGENT, adapter: { kind: 'echo', options: { delayMs: 900 } } }, null);
+    const task = await create(`/api/missions/${mission.id}/tasks`, { assignee: 'deepseek-harness-deepseekv4', title: '慢速执行', brief: 'slow' }, PI, 'task');
     check('正在执行的慢任务状态是 working', await poll(async () => (await api('GET', `/api/tasks/${task.id}`, OWNER)).json.task?.status === 'working', 450));
     check('慢任务最终进入 reported', await poll(async () => (await api('GET', `/api/tasks/${task.id}`, OWNER)).json.task?.status === 'reported'));
   });
@@ -245,9 +245,9 @@ try {
   });
 
   await section('普通echo执行也保留重做版本', async () => {
-    await create('/api/register', { name: '小王', kind: 'agent', token: AGENT, adapter: { kind: 'echo' } }, null);
+    await create('/api/register', { name: 'deepseek-harness-deepseekv4', kind: 'agent', token: AGENT, adapter: { kind: 'echo' } }, null);
     const echoMission = await create('/api/missions', { title: '普通echo版本记录', channel: 'lab' }, PI, 'mission');
-    const task = await create(`/api/missions/${echoMission.id}/tasks`, { assignee: '小王', title: 'echo重做', brief: 'echo初稿' }, PI, 'task');
+    const task = await create(`/api/missions/${echoMission.id}/tasks`, { assignee: 'deepseek-harness-deepseekv4', title: 'echo重做', brief: 'echo初稿' }, PI, 'task');
     const read = async (token = OWNER) => (await api('GET', `/api/tasks/${task.id}`, token)).json.task;
     assert.ok(await poll(async () => (await read())?.status === 'reported'));
     const first = await read();

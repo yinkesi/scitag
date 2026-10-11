@@ -47,30 +47,31 @@ const prof = 'demo-jiaoshou';
 {
   console.log('[重复审批/重复交卷]');
   const m = (await api('POST', '/api/missions', { token: prof, body: { title: '边界课题', brief: 'x', channel: 'lab' } })).json.mission;
-  const t1 = (await api('POST', `/api/missions/${m.id}/tasks`, { token: prof, body: { assignee: '小王', title: 'A', brief: 'x' } })).json.task;
+  const t1 = (await api('POST', `/api/missions/${m.id}/tasks`, { token: prof, body: { assignee: 'deepseek-harness-deepseekv4', title: 'A', brief: 'x' } })).json.task;
   await poll(async () => (await api('GET', `/api/tasks/${t1.id}`, { token: prof })).json.task.status === 'reported');
   await api('POST', `/api/tasks/${t1.id}/review`, { token: 'demo-wangyan', body: { decision: 'approve', comment: 'ok' } });
   const dup = await api('POST', `/api/tasks/${t1.id}/review`, { token: 'demo-wangyan', body: { decision: 'reject', comment: '反悔' } });
   ok(dup.status === 400, 'published 后再审批 → 400（状态机拦截反悔）');
-  const rep2 = await api('POST', `/api/tasks/${t1.id}/report`, { token: 'demo-xiaowang', body: { text: '再交一次' } });
+  const rep2 = await api('POST', `/api/tasks/${t1.id}/report`, { token: 'demo-deepseekv4', body: { text: '再交一次' } });
   ok(rep2.status === 400, 'published 后 agent 再交卷 → 400');
 
   console.log('[非法输入]');
   ok((await api('POST', '/api/missions', { token: prof, body: { title: '', channel: 'lab' } })).status === 400, '空课题名 → 400');
-  ok((await api('POST', '/api/missions', { token: prof, body: { title: 'x', channel: 'dm:小王~王研' } })).status === 400, '课题建在私聊上 → 400');
-  const badSkill = await api('POST', `/api/missions/${m.id}/tasks`, { token: prof, body: { assignee: '小王', title: 'B', brief: 'y', skills: ['不存在的技能'] } });
+  ok((await api('POST', '/api/missions', { token: prof, body: { title: 'x', channel: 'dm:deepseek-harness-deepseekv4~王研' } })).status === 400, '课题建在私聊上 → 400');
+  const badSkill = await api('POST', `/api/missions/${m.id}/tasks`, { token: prof, body: { assignee: 'deepseek-harness-deepseekv4', title: 'B', brief: 'y', skills: ['不存在的技能'] } });
   ok(badSkill.status === 200, '点名未知技能不炸（注入时自然落空）');
   await poll(async () => (await api('GET', `/api/tasks/${badSkill.json.task.id}`, { token: prof })).json.task.status === 'reported');
   const repB = (await api('GET', `/api/tasks/${badSkill.json.task.id}`, { token: 'demo-wangyan' })).json.task.report;
   ok(repB.replace(/\*/g, '').includes('使用外挂技能：无'), '未知技能时上下文注入为空而非报错');
-  ok((await api('POST', '/api/register', { body: { name: 'x'.repeat(25) } })).status === 400, '超长名字 → 400');
+  ok((await api('POST', '/api/register', { body: { name: 'x'.repeat(49) } })).status === 400, '超长名字 → 400');
+  ok((await api('POST', '/api/register', { body: { name: 'deepseek-harness-deepseekv4', token: 'demo-deepseekv4' } })).status === 200, '载体+模型长名（27 字符）可用 token 重新登录');
   ok((await api('POST', '/api/register', { body: { name: 'a b' } })).status === 400, '名字带空格 → 400');
   ok((await api('POST', '/api/register', { body: { name: 'all' } })).status === 400, '保留字 all → 400');
 
   console.log('[unicode 与注入面]');
   const nm = (await api('POST', '/api/register', { body: { name: 'ＡＢＣ' } })).json; // 全角
   ok(nm.token ? true : false, '全角名注册（NFC 归一化路径）');
-  const inj = await api('POST', '/api/messages', { token: 'demo-wangyan', body: { channel: 'lab', text: '@小王 <img src=x onerror=alert(1)> 测试' } });
+  const inj = await api('POST', '/api/messages', { token: 'demo-wangyan', body: { channel: 'lab', text: '@deepseek-harness-deepseekv4 <img src=x onerror=alert(1)> 测试' } });
   ok(inj.status === 200, 'HTML 载荷消息不炸（前端 esc 兜底）');
 
   console.log('[llm 后端错误路径]');

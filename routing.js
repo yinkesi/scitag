@@ -65,7 +65,7 @@ export function stripMention(text, name) {
 
 /**
  * name 是否是这条 mentions 的投递对象（读时展开的唯一裁判）：
- *   具体名命中        —— @小王
+ *   具体名命中        —— @deepseek-harness-deepseekv4
  *   '@all'            —— 全频道成员
  *   '@owner'          —— 仅群主（isOwner 由调用方按 channel.owner 现算）
  */

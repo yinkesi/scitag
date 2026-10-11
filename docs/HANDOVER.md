@@ -16,11 +16,11 @@ node test-smoke.mjs   # 46 断言：交流层/资源层/执行层/工作流全�
 node test-edge.mjs    # 20 对抗探针：重复审批/非法输入/死地址后端/越权/超长截断
 ```
 
-演示账号（登录页一键进入）：教授 `demo-jiaoshou`（PI·领导）· 王研 `demo-wangyan`（小王的主人）
-· 李研 `demo-liyan` · agent 小王 `demo-xiaowang`。
+演示账号（登录页一键进入）：教授 `demo-jiaoshou`（PI·领导）· 王研 `demo-wangyan`（deepseek-v4 的主人）
+· 李研 `demo-liyan` · agent `deepseek-harness-deepseekv4` `demo-deepseekv4` / `codex-gpt5.6sol` `demo-codex-sol`。
 
-三分钟演示：登录教授 → 任务板「新课题」→ 课题卡「派活」（选小王、点名 `#scaffold-explain`）
-→ echo 后端秒出成果，自动落 小王↔王研 私聊 → 换王研登录，待审卡「批准 · 回群」
+三分钟演示：登录教授 → 任务板「新课题」→ 课题卡「派活」（选 `deepseek-harness-deepseekv4`、点名 `#scaffold-explain`）
+→ echo 后端秒出成果，自动落 agent↔王研 私聊 → 换王研登录，待审卡「批准 · 回群」
 → 回群卡出现在课题组群并 @教授 → 换教授「汇总」（可结题）。
 
 ## 2. 代码地图

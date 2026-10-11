@@ -19,6 +19,7 @@
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import * as routing from './routing.js';
@@ -40,6 +41,14 @@ const MAX_AGENT_CHAIN = Number(process.env.SCITAG_MAX_CHAIN || 8); // 群内纯 
 const MSG_KEEP = 4000;
 const BODY_LIMIT = 256 * 1024;
 const DIGEST_LEN = 600; // 卡片里的成果摘要长度
+// 名字上限：agent 用「载体+模型」本名（如 deepseek-harness-deepseekv4 = 27 字符），24 太紧。
+// 仍禁止空白/@/#：@ 路由与 dm:<a>~<b> 频道 id 都要求名字是无分隔 token。
+const NAME_MAX = 48;
+
+// 演示课题组的 agent 身份 = 「载体 + 模型」本名，而不是拟人化昵称。
+// 名字里刻意不放空格：routing.parseMentions 的 @ 命中与 dm:<a>~<b> 频道 id 都以无空白 token 最稳。
+const AGENT_DEEPSEEK = 'deepseek-harness-deepseekv4';
+const AGENT_CODEX = 'codex-gpt5.6sol';
 
 /* ---------------- 数据与持久化 ---------------- */
 
@@ -90,7 +99,7 @@ function seed() {
   // 演示 token 用 ASCII（HTTP 头不接受非 latin1 字符），中文账号走拼音映射
   const DEMO_TOKEN = {
     '教授': 'demo-jiaoshou', '王研': 'demo-wangyan', '李研': 'demo-liyan',
-    '小王': 'demo-xiaowang', '小李': 'demo-xiaoli',
+    'deepseek-harness-deepseekv4': 'demo-deepseekv4', 'codex-gpt5.6sol': 'demo-codex-sol',
   };
   const mkHuman = (name, persona) => {
     db.agents[name] = {
@@ -110,15 +119,15 @@ function seed() {
   mkHuman('教授', '课题组长（PI），负责定方向、派课题、收汇总');
   mkHuman('王研', '材料学研究者，关注物理机理与可解释性');
   mkHuman('李研', '机器学习研究者，负责建模与逆设计');
-  mkAgent('小王', '王研的研究 agent，擅长物理机理归因', '王研', { kind: 'echo' });
-  mkAgent('小李', '李研的研究 agent，擅长函数拟合与逆设计', '李研', { kind: 'echo' });
+  mkAgent(AGENT_DEEPSEEK, '王研的研究 agent（DeepSeek Harness · DeepSeek V4），擅长物理机理归因', '王研', { kind: 'echo' });
+  mkAgent(AGENT_CODEX, '李研的研究 agent（Codex · GPT-5.6 Sol），擅长函数拟合与逆设计', '李研', { kind: 'echo' });
 
   db.channels['lab'] = {
     id: 'lab', name: '骨支架课题组', topic: '钛合金骨支架多目标拓扑优化：刚度 vs 渗透率',
     type: 'group', members: [], owner: '教授', createdAt: now - 72 * H, isPublic: true,
   };
 
-  for (const name of ['教授', '王研', '李研', '小王', '小李']) {
+  for (const name of ['教授', '王研', '李研', AGENT_DEEPSEEK, AGENT_CODEX]) {
     db.channels['lab'].members.push(name);
     sysMsg('lab', `${name} 加入了群聊`, now - 72 * H);
   }
@@ -131,8 +140,8 @@ function seed() {
     });
   };
   msg('教授', '课题组好。咱们的骨支架数据集（100 组 COMSOL 仿真）已经就位，接下来围绕三条线推进：吃透数据、解释 output 成因、建立 input↔output 函数关系并支持逆设计。', 48);
-  msg('王研', '收到，机理归因这块我来。@小王 待会儿我把任务派给你。', 47.5);
-  msg('李研', '建模和逆设计我来，@小李 准备干活。', 47.2);
+  msg('王研', `收到，机理归因这块我来。@${AGENT_DEEPSEEK} 待会儿我把任务派给你。`, 47.5);
+  msg('李研', `建模和逆设计我来，@${AGENT_CODEX} 准备干活。`, 47.2);
 
   // 播种的主人默认在场（演示时打开网页即可见在线）
   for (const n of ['教授', '王研', '李研']) lastSeen.set(n, Date.now());
@@ -918,7 +927,7 @@ async function route(req, res) {
     if (p === '/api/register' && method === 'POST') {
       const name = String(body.name || '').trim().normalize('NFC');
       const kind = body.kind === 'agent' ? 'agent' : 'human';
-      if (!name || name.length > 24) return json(res, 400, { error: '名字不能为空且不超过 24 字符' });
+      if (!name || name.length > NAME_MAX) return json(res, 400, { error: `名字不能为空且不超过 ${NAME_MAX} 字符` });
       if (/[\s@#]/.test(name)) return json(res, 400, { error: '名字里不能有空格、@ 或 #' });
       if (routing.RESERVED.has(name.toLowerCase())) return json(res, 400, { error: '「all / owner」是路由保留字' });
       const existing = db.agents[name];
@@ -1400,13 +1409,27 @@ function serveStatic(p, res) {
 
 /* ---------------- 启动 ---------------- */
 
+// 跨设备访问提示：列出本机所有可用于外部设备访问的 IPv4 地址（跳过回环与 169.254 链路本地）。
+function lanUrls(port) {
+  const out = [];
+  for (const list of Object.values(os.networkInterfaces())) {
+    for (const ni of list || []) {
+      if (ni.family !== 'IPv4' || ni.internal) continue;
+      if (ni.address.startsWith('169.254.')) continue;
+      out.push(`http://${ni.address}:${port}`);
+    }
+  }
+  return out;
+}
+
 loadDb();
 fs.mkdirSync(DATA_DIR, { recursive: true });
 const server = http.createServer((req, res) => { route(req, res).catch((e) => json(res, 500, { error: e.message })); });
 server.listen(PORT, () => {
   const healed = engine.heal(); // 崩溃自愈：把 working 的 job 放回队列
-  console.log(`SciTag 已启动  http://127.0.0.1:${PORT}${healed ? `（恢复 ${healed} 个中断任务）` : ''}`);
-  console.log(`课题组演示账号 token：demo-jiaoshou / demo-wangyan / demo-liyan（agent：demo-xiaowang / demo-xiaoli）`);
+  console.log(`SciTag 已启动  本机 http://127.0.0.1:${PORT}${healed ? `（恢复 ${healed} 个中断任务）` : ''}`);
+  for (const url of lanUrls(PORT)) console.log(`              同一局域网/组网内可访问  ${url}`);
+  console.log(`课题组演示账号 token：demo-jiaoshou / demo-wangyan / demo-liyan（agent：demo-deepseekv4 / demo-codex-sol）`);
 });
 for (const sig of ['SIGINT', 'SIGTERM']) {
   process.on(sig, () => { saveNow(); process.exit(0); });
