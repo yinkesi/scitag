@@ -1552,6 +1552,11 @@ for (const sig of ['SIGINT', 'SIGTERM']) {
 // one db reference. Other instances coordinate through the database revision CAS.
 let cloudTail = Promise.resolve();
 export async function handleCloud(request, backend) {
+  if (new URL(request.url).pathname === '/api/config' && request.method === 'GET') {
+    return Response.json({ production: true, remoteOnly: true, transport: 'poll',
+      ready: !!backend || !!(process.env.SUPABASE_URL && process.env.SUPABASE_PUBLISHABLE_KEY &&
+        process.env.SCITAG_DATABASE_SECRET && process.env.SCITAG_ADMIN_TOKEN) }, { headers: { 'cache-control': 'no-store' } });
+  }
   const previous = cloudTail;
   let release;
   cloudTail = new Promise(resolve => { release = resolve; });

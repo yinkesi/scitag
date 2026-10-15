@@ -32,6 +32,8 @@ async function api(route, token, body, method = body ? 'POST' : 'GET') {
 test('two server instances and real local subprocess complete collaboration, review, retry and discussion', async t => {
   const admin = process.env.SCITAG_ADMIN_TOKEN;
   assert.equal((await api('/api/config')).production, true);
+  const unconfigured = await first(new Request('https://scitag.test/api/config'));
+  assert.equal((await unconfigured.json()).ready, false);
   const options = await first(new Request('https://scitag.test/api/worker/jobs/claim', { method: 'OPTIONS' }), backend);
   assert.equal(options.status, 204);
   assert.equal((await api('/api/agents')).status, 401);

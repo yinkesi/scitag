@@ -20,6 +20,11 @@ const configReady = fetch('/api/config').then(r => {
     const hint = document.querySelector('.gate-hint');
     if (hint) hint.textContent = '使用课题组分配的名字和访问凭据登录';
   }
+  if (config.ready === false) {
+    document.getElementById('btnLogin').disabled = true;
+    const hint = document.querySelector('.gate-hint');
+    if (hint) hint.textContent = '协作服务尚未开通，请稍后再试';
+  }
 });
 
 const $ = (id) => document.getElementById(id);
