@@ -4,9 +4,11 @@ import path from 'node:path';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const checks = ['server.js', 'engine.mjs', 'adapters.mjs', 'workflow.js', 'routing.js',
-  'persistence.mjs', 'research.mjs', 'public/workspace.js', 'public/app.js'].map(file => ['--check', file]);
+  'persistence.mjs', 'research.mjs', 'remote-jobs.mjs', 'cloud-store.mjs', 'worker.mjs',
+  'worker-executors.mjs', 'api/index.js', 'public/workspace.js', 'public/app.js'].map(file => ['--check', file]);
 const suites = [['test-smoke.mjs'], ['test-edge.mjs'],
-  ['--test', 'test-persistence.mjs', 'test-research.mjs', 'test-llm-tools.mjs'], ['test-regression.mjs']];
+  ['--test', 'test-persistence.mjs', 'test-research.mjs', 'test-llm-tools.mjs',
+    'test-remote-jobs.mjs', 'test-cloud-store.mjs', 'test-worker.mjs', 'test-remote.mjs'], ['test-regression.mjs']];
 for (const args of [...checks, ...suites]) {
   const result = spawnSync(process.execPath, args, { cwd: root, stdio: 'inherit', windowsHide: true });
   if (result.error || result.status !== 0) {

@@ -2,6 +2,7 @@
 'use strict';
 
 const S = {
+  config: {},
   token: localStorage.getItem('scitag_token') || '',
   name: localStorage.getItem('scitag_name') || '',
   me: null, agents: [], channels: [], missions: [], domains: [], backends: [],
@@ -9,6 +10,17 @@ const S = {
   es: null,
   sidebarMode: 'talk', navigation: [], navigationIndex: -1,
 };
+const configReady = fetch('/api/config').then(r => {
+  if (!r.ok) throw new Error('无法读取服务配置');
+  return r.json();
+}).then(config => {
+  S.config = config;
+  if (config.production) {
+    document.getElementById('gateQuick')?.classList.add('hidden');
+    const hint = document.querySelector('.gate-hint');
+    if (hint) hint.textContent = '使用课题组分配的名字和访问凭据登录';
+  }
+});
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -59,6 +71,7 @@ function logout() { localStorage.removeItem('scitag_token'); localStorage.remove
 /* ---------------- 启动 ---------------- */
 
 async function boot() {
+  await configReady;
   $('gate').classList.add('hidden');
   $('app').classList.remove('hidden');
   await refreshState();
@@ -664,16 +677,20 @@ function summarizeModal(m) {
 }
 
 $('btnAddAgent').onclick = () => {
-  const humans = S.agents.filter((a) => a.kind === 'human');
-  const backends = [{ id: 'none', label: '仅占位（外部 runtime 接入）' },
-    ...S.backends.map((b) => ({ id: b.id, label: b.label + (b.available ? '' : '（不可用）') }))];
+  const humans = S.agents.filter((a) => a.kind === 'human' && (!S.config.production || S.me.isAdmin || a.name === S.me.name));
+  const backends = [{ id: 'none', label: '本地 Agent（跨电脑连接）' },
+    ...S.backends.filter(b => b.id !== 'none').map((b) => ({ id: b.id, label: b.label + (b.available ? '' : '（不可用）') }))];
   openModal(`
     <h2>接入新 agent</h2>
     <p class="hint">agent 必须绑定一位主人（研究者），并挂载域包获得外挂知识库与技能。</p>
+    ${S.me.isAdmin ? '<button class="btn" id="addResearcher">先添加研究者</button>' : ''}
     <div class="form-row"><input id="agName" placeholder="agent 名字"><select id="agOwner"><option value="">主人（研究者）</option>${humans.map((h) => `<option>${esc(h.name)}</option>`).join('')}</select></div>
     <label>人设</label><input id="agPersona" placeholder="擅长什么、口吻如何">
     <label>挂载域包</label><div class="chip-select" id="agDomains">${S.domains.map((d) => `<span class="chip" data-d="${esc(d.name)}">${esc(d.name)}</span>`).join('')}</div>
     <label>执行后端</label><select id="agAdapter">${backends.map((b) => `<option value="${esc(b.id)}">${esc(b.label)}</option>`).join('')}</select>
+    <div id="agLocalFields"><label for="agExecutor">本机使用的 Agent</label><select id="agExecutor"><option value="codex">Codex CLI</option><option value="claude">Claude Code</option><option value="deepseek">DeepSeek Harness</option></select>
+    <label for="agWorkspace">这台电脑的任务文件夹</label><input id="agWorkspace" placeholder="例如 D:\\research\\scitag-work 或 /home/me/research">
+    <p class="hint">注册后下载接入配置，在运行该 Agent 的电脑启动接入程序。模型和工具在那台电脑执行。</p></div>
     <div id="agAnalysisFields" class="hidden">
       <label for="agCommand">分析步骤</label><select id="agCommand"><option value="stats">数据统计</option><option value="fit">函数拟合</option><option value="inverse">逆设计</option></select>
       <div id="agTargetRow" class="hidden"><label for="agTarget">compliance 目标上限</label><input id="agTarget" type="number" step="any" min="0" value="8e-11"></div>
@@ -687,10 +704,20 @@ $('btnAddAgent').onclick = () => {
     </div>
     <div id="agWebhookFields" class="hidden"><label for="agWebhookUrl">Agent 接入地址</label><input id="agWebhookUrl" type="url" placeholder="https://你的 agent 服务地址"></div>
     <div class="foot"><button class="btn" onclick="closeModal()">取消</button><button class="btn primary" id="agGo">注册</button></div>`);
+  if (S.me.isAdmin) $('addResearcher').onclick = () => {
+    openModal('<h2>添加研究者</h2><label for="humanName">研究者名字</label><input id="humanName" maxlength="48"><div class="foot"><button class="btn primary" id="createHuman">创建</button><button class="btn" onclick="closeModal()">取消</button></div>');
+    $('createHuman').onclick = async () => {
+      try {
+        const result = await api('/api/register', { method: 'POST', body: { name: $('humanName').value.trim() } });
+        openModal(`<h2>研究者已添加</h2><p>账号：${esc(result.me.name)}</p><p class="hint">把下方访问凭据私下交给这位研究者，用于登录与审阅。请勿发到群聊。</p><div class="digest mono">${esc(result.token)}</div><div class="foot"><button class="btn" onclick="closeModal()">关闭</button></div>`);
+        await refreshState();
+      } catch (error) { toast(error.message, true); }
+    };
+  };
   $('agDomains').querySelectorAll('.chip').forEach((ch) => ch.onclick = () => ch.classList.toggle('on'));
   $('agDomains').querySelectorAll('.chip')[0]?.classList.add('on');
   $('agAdapter').onchange = () => {
-    for (const [id, kind] of [['agAnalysisFields', 'analysis'], ['agLlmFields', 'llm'], ['agWebhookFields', 'webhook']]) {
+    for (const [id, kind] of [['agAnalysisFields', 'analysis'], ['agLlmFields', 'llm'], ['agWebhookFields', 'webhook'], ['agLocalFields', 'none']]) {
       $(id).classList.toggle('hidden', $('agAdapter').value !== kind);
     }
   };
@@ -699,6 +726,9 @@ $('btnAddAgent').onclick = () => {
     const domains = [...$('agDomains').querySelectorAll('.chip.on')].map((c) => c.dataset.d);
     try {
       const kind = $('agAdapter').value;
+      const executor = $('agExecutor').value;
+      const workspace = $('agWorkspace').value.trim();
+      if (kind === 'none' && !workspace) throw new Error('请填写运行 Agent 的电脑上的任务文件夹');
       let options = {};
       if (kind === 'analysis') {
         if (!domains.includes('bone-scaffold')) throw new Error('科研分析需要挂载 bone-scaffold 域包');
@@ -715,13 +745,19 @@ $('btnAddAgent').onclick = () => {
         if (!options.url) throw new Error('请填写 Agent 接入地址');
       }
       const r = await fetch('/api/register', {
-        method: 'POST', headers: { 'content-type': 'application/json' },
+        method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + S.token },
         body: JSON.stringify({ kind: 'agent', name: $('agName').value, owner: $('agOwner').value, persona: $('agPersona').value, domains, adapter: { kind, options } }),
       });
       const j = await r.json();
       if (!r.ok) return toast(j.error, true);
       closeModal();
-      openModal(`<h2>已注册</h2><p class="hint">agent 的 token（交给它的 runtime / webhook 用）：</p><div class="digest mono">${esc(j.token)}</div><div class="foot"><button class="btn" onclick="closeModal()">收好</button></div>`);
+      openModal(`<h2>已注册</h2><p class="hint">${kind === 'none' ? '下载配置后，在对应电脑运行接入程序。每台电脑、每个 Agent 使用独立配置。' : '请妥善保存 Agent 访问凭据。'}</p>${kind === 'none' ? '<p><a href="/worker-client.zip" download>下载接入程序与使用说明</a></p>' : ''}<div class="digest mono">${esc(j.token)}</div><div class="foot">${kind === 'none' ? '<button class="btn primary" id="downloadWorkerConfig">下载接入配置</button>' : ''}<button class="btn" onclick="closeModal()">关闭</button></div>`);
+      if (kind === 'none') $('downloadWorkerConfig').onclick = () => {
+        const blob = new Blob([JSON.stringify({ server: location.origin, token: j.token, executor, workspace, sandbox: 'read-only' }, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob), link = document.createElement('a');
+        link.href = url; link.download = 'worker.' + executor + '.json'; link.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      };
       await refreshState();
     } catch (e) { toast(e.message, true); }
   };
@@ -799,6 +835,27 @@ async function send() {
 
 function connectSSE() {
   if (S.es) S.es.close();
+  clearTimeout(S.pollTimer);
+  if (S.config.transport === 'poll') {
+    const poll = async () => {
+      try {
+        const data = await api('/api/events?since=' + S.seq);
+        if (data.events?.length || data.reset || data.backfill || Date.now() - (S.lastStatePoll || 0) > 30000) {
+          for (const event of data.events || []) if (event.task?.id) delete fullTaskCache[event.task.id];
+          await refreshState();
+          S.lastStatePoll = Date.now();
+          if (S.cur) {
+            const messages = await api('/api/messages?channel=' + encodeURIComponent(S.cur));
+            S.msgs[S.cur] = messages.messages || [];
+          }
+          renderMsgs(); renderPanel();
+        }
+        S.seq = Math.max(S.seq, data.cursor || 0);
+      } catch (error) { console.warn('协作更新暂时中断，正在重连'); }
+      S.pollTimer = setTimeout(poll, document.hidden ? 15000 : 3000);
+    };
+    poll(); return;
+  }
   S.es = new EventSource('/api/stream?token=' + encodeURIComponent(S.token));
   S.es.onmessage = (ev) => {
     let e; try { e = JSON.parse(ev.data); } catch { return; }
@@ -827,5 +884,6 @@ function connectSSE() {
 /* ---------------- 自动登录 ---------------- */
 
 initializeShellUI();
-if (S.token && S.name) boot().catch(() => { localStorage.removeItem('scitag_token'); location.reload(); });
+if (S.token && S.name) boot().catch(error => { toast(error.message, true); $('gate').classList.remove('hidden'); $('app').classList.add('hidden'); });
 else $('gate').classList.remove('hidden');
+configReady.catch(error => toast(error.message, true));

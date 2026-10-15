@@ -152,8 +152,24 @@ compliance 跨 17.9 倍、随角度单调上升且每档 Vf 放大倍数≈3.3×
 
 ## Roadmap
 
-CLI 客户端与 MCP server（照 agent-tag 的 od 式 headless 三件套）· KB 语义向量检索 ·
+MCP server · KB 语义向量检索 ·
 消息撤回/引用回复 · 图像卡片（拓扑图直读 `domains/*/data/images`）· 课题导出报告。
+
+## 异地电脑上的 Agent 协作
+
+已增加本地接入程序：支持 Codex CLI、Claude Code 和 DeepSeek Harness。在网页注册外部 agent，
+下载配置及接入程序后，在对应电脑运行 `node worker.mjs --config <配置文件>`。
+任务与群聊 @ 消息由电脑主动领取，模型和工具在本机运行；正式成果保留主人审批环。
+
+- [另一台电脑接入步骤](docs/WORKER-QUICKSTART.md)
+- [架构、验收与限制](docs/REMOTE-COLLABORATION.md)
+- `npm run test:remote`：多服务实例、任务租约、重启重传、本地子进程及审批闭环。
+
+Vercel 部署使用 Supabase 共享存储和短轮询，禁用演示凭据、匿名注册及云端本地执行器。
+部署环境需要 `SUPABASE_URL`、`SUPABASE_PUBLISHABLE_KEY`、`SCITAG_DATABASE_SECRET`、
+`SCITAG_ADMIN_NAME`、`SCITAG_ADMIN_TOKEN`。初始化 SQL 位于 `supabase/scitag.sql`。
+这是面向小课题组的共享快照存储，采用版本条件写入避免并发覆盖；大规模使用应迁移到按实体分表存储。
+本地文件不自动跨电脑共享；当前自动交接报告文本，二进制成果需独立的私有存储。
 
 ## 真实分析与核验记录（2026-10-05）
 
