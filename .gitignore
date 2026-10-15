@@ -4,3 +4,7 @@ node_modules/
 *.tmp
 __pycache__/
 *.pyc
+.vercel/
+.env*
+.scitag-workers/
+worker.*.json

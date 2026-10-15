@@ -1,0 +1,8 @@
+.git
+data
+node_modules
+.env*
+.scitag-workers
+worker.*.json
+domains/*/data
+test-*.mjs

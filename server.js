@@ -24,12 +24,17 @@ import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import * as routing from './routing.js';
 import * as workflow from './workflow.js';
-import { getAdapter, listBackends } from './adapters.mjs';
+import { getAdapter, listBackends, buildPrompt } from './adapters.mjs';
 import { makeEngine } from './engine.mjs';
 import { createStore } from './persistence.mjs';
+import { makeRemoteJobs } from './remote-jobs.mjs';
+import { makeCloudStore } from './cloud-store.mjs';
+import { Readable } from 'node:stream';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.SCITAG_PORT || process.env.PORT || 8093);
+const CLOUD = process.env.SCITAG_SERVERLESS === '1';
+const PRODUCTION = CLOUD || process.env.SCITAG_PRODUCTION === '1';
 const DATA_DIR = path.join(ROOT, 'data');
 const DB_FILE = path.join(DATA_DIR, 'db.json');
 const PUBLIC_DIR = path.join(ROOT, 'public');
@@ -56,14 +61,14 @@ let db = null;
 const store = createStore(DB_FILE);
 
 function defaultDb() {
-  return { seq: 0, agents: {}, channels: {}, messages: [], events: [], dedup: {}, missions: {}, tasks: {}, jobs: [] };
+  return { seq: 0, agents: {}, channels: {}, messages: [], events: [], dedup: {}, missions: {}, tasks: {}, jobs: [], remoteJobs: [] };
 }
 
 function loadDb() {
   db = store.load();
   if (!db) {
     db = defaultDb();
-    seed();
+    if (PRODUCTION) seedProduction(); else seed();
   }
   for (const ch of Object.values(db.channels)) {
     if (ch.type === 'group' && !ch.owner) ch.owner = ch.members[0] || null;
@@ -72,12 +77,16 @@ function loadDb() {
   if (!db.jobs) db.jobs = [];
   if (!db.missions) db.missions = {};
   if (!db.tasks) db.tasks = {};
+  if (!db.remoteJobs) db.remoteJobs = [];
+  if (PRODUCTION && Object.values(db.agents).some(a => a.token?.startsWith('demo-'))) throw new Error('正式环境拒绝使用演示凭据；请用独立数据目录初始化正式课题组');
   // 崩溃自愈：working 的 job 降级 queued（engine.heal 统一处理）
 }
 
-function save() { store.save(db); }
+let cloudDirty = false;
+function save() { if (CLOUD) cloudDirty = true; else store.save(db); }
 
 function saveNow() {
+  if (CLOUD) { cloudDirty = true; return; }
   store.save(db);
   store.flush();
 }
@@ -92,6 +101,17 @@ const digest = (s, n = DIGEST_LEN) => {
 };
 
 /* ---------------- 演示数据（仅首次启动播种） ---------------- */
+
+function seedProduction() {
+  const name = process.env.SCITAG_ADMIN_NAME || '管理员';
+  const token = process.env.SCITAG_ADMIN_TOKEN;
+  if (!token || token.length < 32 || /[\s@#]/.test(name) || name.length > NAME_MAX) throw new Error('正式部署必须配置有效的管理员名称和至少32字符的随机凭据');
+  db.agents[name] = { name, token, kind: 'human', isAdmin: true, owner: null,
+    domains: [], adapter: { kind: 'none' }, context: 'channel', hue: hueOf(name), createdAt: Date.now() };
+  db.channels.lab = { id: 'lab', name: '科研协作组', type: 'group', isPublic: false,
+    members: [name], owner: name, createdAt: Date.now() };
+  save();
+}
 
 function seed() {
   const H = 3600_000;
@@ -520,7 +540,7 @@ function dispatchMentions(msg, targets) {
     // 卡片消息：任务卡/驳回卡对 adapter agent 也要触发执行，由调用方单独入队；这里只做 webhook 通知
     for (const name of targets) {
       const a = db.agents[name];
-      if (a?.kind === 'agent' && a.webhookUrl && !hasAdapter(a)) fireWebhook(a, msg);
+      if (!CLOUD && a?.kind === 'agent' && a.webhookUrl && !hasAdapter(a)) fireWebhook(a, msg);
     }
     return;
   }
@@ -533,13 +553,15 @@ function dispatchMentions(msg, targets) {
         text: routing.stripMention(msg.text, name).trim() || msg.text,
         from: msg.from, skillTags: msg.skills || [], depth: 0,
       });
-    } else if (a.webhookUrl) {
-      fireWebhook(a, msg);
+    } else {
+      remote.enqueue({ key: `chat:${msg.seq}:${name}`, kind: 'chat', agentName: name,
+        channel: msg.channel, messageSeq: msg.seq, from: msg.from, text: msg.text, skillTags: msg.skills || [] });
+      if (a.webhookUrl && !CLOUD) fireWebhook(a, msg);
     }
   }
 }
 
-const hasAdapter = (a) => a.adapter && a.adapter.kind && a.adapter.kind !== 'none' && !!getAdapter(a.adapter.kind);
+const hasAdapter = (a) => !CLOUD && a.adapter && a.adapter.kind && a.adapter.kind !== 'none' && !!getAdapter(a.adapter.kind);
 
 /* ---------------- webhook 投递（HMAC 签名 + 指数退避，学自 agent-tag/TagIt） ---------------- */
 
@@ -605,10 +627,10 @@ const lastSeen = new Map();
 const touchPresence = (name) => { if (name) lastSeen.set(name, Date.now()); };
 function isOnline(a) {
   if (a.kind === 'agent' && hasAdapter(a)) return true; // 执行器在平台内，视作常在
-  const t = lastSeen.get(a.name);
+  const t = lastSeen.get(a.name) || a.lastSeen;
   return (t && Date.now() - t < ONLINE_TTL_MS) || [...sseClients].some((c) => c.name === a.name);
 }
-let presenceTimer = setInterval(() => {
+let presenceTimer = CLOUD ? null : setInterval(() => {
   for (const a of Object.values(db.agents)) {
     const before = a._online;
     const now = isOnline(a);
@@ -630,6 +652,7 @@ function pubTask(t, { withReport = false, forName = null } = {}) {
     review: readable ? (t.review || null) : null, publishedSeq: t.publishedSeq || null,
     createdAt: t.createdAt, updatedAt: t.updatedAt,
     history: t.history || [],
+    execution: t.remoteExecution || null,
   };
   out.reportDigest = readable ? (t.report ? digest(t.report, 200) : t.reportDigest || null) : null;
   if (withReport && readable) {
@@ -711,6 +734,7 @@ function createTask(mission, actor, input) {
     });
   }
   taskEvent(task);
+  if (!hasAdapter(agent)) queueRemoteTask(task);
   save();
   return { ok: true, task: db.tasks[id] };
 }
@@ -778,6 +802,7 @@ function afterReview(task) {
           from: t2.task.owner, skillTags: t2.task.skills || [], depth: 0,
         });
       }
+      if (!hasAdapter(agent)) queueRemoteTask(t2.task);
     } else {
       addMessage(m.channel, null, '', {
         kind: 'card', fromKind: 'system',
@@ -793,6 +818,54 @@ function afterReview(task) {
 }
 
 /* ---------------- 执行队列接线 ---------------- */
+
+function queueRemoteTask(task) {
+  const mission = missionOf(task);
+  return remote.enqueue({ key: `task:${task.id}:${task.attempts}`, kind: 'task',
+    taskId: task.id, attempt: task.attempts, agentName: task.assignee, channel: mission.channel,
+    from: mission.leader, text: `【课题】${mission.title}\n【任务】${task.title}\n【任务书】${task.brief}`,
+    skillTags: task.skills || [] });
+}
+
+const remote = makeRemoteJobs({
+  jobs: () => db.remoteJobs, task: id => db.tasks[id], save,
+  canRun: job => {
+    const a = db.agents[job.agentName];
+    return a?.kind === 'agent' && !hasAdapter(a) && canReadChannel(a.name, channelOf(job.channel));
+  },
+  start: id => {
+    const task = db.tasks[id];
+    if (task.status === 'dispatched') db.tasks[id] = workflow.transition(task, 'start').task;
+    taskEvent(db.tasks[id]);
+  },
+  claimed: job => {
+    const message = db.messages.find(m => m.seq === job.messageSeq);
+    if (message && markReceipt(message, job.agentName, 'read')) pushEvent({ type: 'receipt',
+      msgSeq: message.seq, channel: message.channel, name: job.agentName, state: 'read' });
+  },
+  payload: job => {
+    const a = db.agents[job.agentName];
+    const input = { ...job, ownerName: a.owner, persona: a.persona,
+      taskTitle: db.tasks[job.taskId]?.title, channelName: channelOf(job.channel)?.name,
+      context: buildContext(a.name, job.text, job.skillTags), history: channelHistory(job.channel, a.name) };
+    return { prompt: buildPrompt(input), agentName: a.name, channel: job.channel };
+  },
+  finish: (job, text, failed) => {
+    if (job.kind === 'task') {
+      const task = db.tasks[job.taskId];
+      const result = workflow.transition(task, failed ? 'fail' : 'report', { text, reason: text, by: job.agentName });
+      if (!result.ok) throw new Error(result.reason);
+      result.task.remoteExecution = { workerId: job.workerId, jobId: job.id, attempt: job.attempt, finishedAt: Date.now(), failed };
+      db.tasks[task.id] = result.task;
+      if (!failed) deliverReport(result.task);
+      else {
+        addMessage(job.channel, null, '', { kind: 'card', fromKind: 'system', mentions: [task.owner],
+          taskId: task.id, card: { type: 'fail', taskId: task.id, title: task.title, agentName: task.assignee, reason: '本地 Agent 执行失败，详细记录仅主人和执行 Agent 可见' } });
+        taskEvent(result.task);
+      }
+    } else if (!failed) addMessage(job.channel, job.agentName, text.slice(0, 4000));
+  },
+});
 
 const engine = makeEngine({
   get jobs() { return db.jobs; }, // getter 惰性解引用：engine 构造时 db 可能还没 load
@@ -868,7 +941,7 @@ function json(res, code, obj) {
   const body = JSON.stringify(obj);
   res.writeHead(code, {
     'content-type': 'application/json; charset=utf-8',
-    'access-control-allow-origin': '*',
+    ...(!PRODUCTION ? { 'access-control-allow-origin': '*' } : {}),
     'access-control-allow-headers': 'content-type, authorization',
     'access-control-allow-methods': 'GET, POST, OPTIONS',
   });
@@ -919,8 +992,12 @@ async function route(req, res) {
   }
 
   try {
+    if (p === '/api/config' && method === 'GET') return json(res, 200, {
+      production: PRODUCTION, transport: CLOUD ? 'poll' : 'sse', remoteOnly: CLOUD });
     if (p === '/api/health' && method === 'GET') {
-      return json(res, 200, { ok: true, name: 'scitag', uptime: process.uptime(), seq: db.seq, jobs: engine.stats() });
+      const jobs = engine.stats(), remoteCounts = remote.stats();
+      for (const key of Object.keys(jobs)) jobs[key] += remoteCounts[key];
+      return json(res, 200, { ok: true, name: 'scitag', uptime: process.uptime(), seq: db.seq, jobs });
     }
 
     /* ---- 注册 / 登录 ---- */
@@ -933,6 +1010,8 @@ async function route(req, res) {
       const existing = db.agents[name];
       if (existing) {
         if (body.token && body.token === existing.token) {
+          if (PRODUCTION && body.webhookUrl) return json(res, 400, { error: '正式环境使用主动连接的本地 worker' });
+          if (CLOUD && body.adapter?.kind && body.adapter.kind !== 'none') return json(res, 400, { error: '云端仅接入本地执行的 agent' });
           if (body.webhookUrl !== undefined) existing.webhookUrl = body.webhookUrl || null;
           if (body.persona) existing.persona = body.persona;
           if (Array.isArray(body.skills)) existing.skills = body.skills.map((s) => String(s).slice(0, 40)).filter(Boolean).slice(0, 4);
@@ -944,6 +1023,13 @@ async function route(req, res) {
         }
         return json(res, 409, { error: `「${name}」已被占用。如果是本人/本 agent，请带 token 重登` });
       }
+      const registrar = auth(req, body);
+      if (PRODUCTION && (!registrar || registrar.kind !== 'human' ||
+        (!registrar.isAdmin && (kind !== 'agent' || body.owner !== registrar.name)))) {
+        return json(res, 403, { error: '新研究者需管理员创建；新 agent 需其主人登录后创建' });
+      }
+      if (PRODUCTION && body.webhookUrl) return json(res, 400, { error: '正式环境使用主动连接的本地 worker' });
+      if (CLOUD && body.adapter?.kind && body.adapter.kind !== 'none') return json(res, 400, { error: '云端仅接入本地执行的 agent' });
       // owner 校验：agent 必须有主人，主人必须是已注册的人类——闭环里「审阅」一环不能缺位
       let owner = null;
       if (kind === 'agent') {
@@ -964,6 +1050,7 @@ async function route(req, res) {
         hue: hueOf(name), createdAt: Date.now(), lastSeen: Date.now(),
       };
       db.agents[name] = agent;
+      if (PRODUCTION && db.channels.lab && !db.channels.lab.members.includes(name)) db.channels.lab.members.push(name);
       if (kind === 'human') touchPresence(name);
       pushEvent({ type: 'presence', name, online: kind === 'human' });
       for (const ch of Object.values(db.channels)) {
@@ -978,8 +1065,29 @@ async function route(req, res) {
 
     const me = auth(req, body);
     const PUBLIC_GET = /^\/api\/(agents|domains(\/[^/]+)?(\/(kb|skills)(\/[^/]+)?)?)$/;
-    if (!me && !PUBLIC_GET.test(p)) return json(res, 401, { error: '无效 token，请先注册 /api/register' });
+    if (!me && (PRODUCTION || !PUBLIC_GET.test(p))) return json(res, 401, { error: '无效 token，请先注册 /api/register' });
     touchPresence(me?.name);
+
+    if (p === '/api/worker/jobs/claim' && method === 'POST') {
+      if (me.kind !== 'agent' || hasAdapter(me)) return json(res, 403, { error: '仅外部 agent 可以领取作业' });
+      // Reconcile old databases and tasks whose notification is no longer in the event ring.
+      for (const task of Object.values(db.tasks)) if (task.assignee === me.name && ['dispatched', 'working'].includes(task.status)) queueRemoteTask(task);
+      const result = remote.claim(me.name, body.workerId);
+      if (Date.now() - (me.lastSeen || 0) > ONLINE_TTL_MS) pushEvent({ type: 'presence', name: me.name, online: true });
+      me.lastSeen = Date.now();
+      saveNow();
+      return json(res, result.status, result);
+    }
+    const remoteRoute = p.match(/^\/api\/worker\/jobs\/(r_[a-f0-9]+)\/(heartbeat|complete)$/);
+    if (remoteRoute && method === 'POST') {
+      if (me.kind !== 'agent') return json(res, 403, { error: '仅 agent 可以更新作业' });
+      const result = remoteRoute[2] === 'heartbeat'
+        ? remote.heartbeat(me.name, remoteRoute[1], body.leaseToken)
+        : remote.complete(me.name, remoteRoute[1], body);
+      me.lastSeen = Date.now();
+      saveNow();
+      return json(res, result.status, result);
+    }
 
     /* ---- 全量状态（登录后第一拉） ---- */
     if (p === '/api/state' && method === 'GET') {
@@ -989,7 +1097,7 @@ async function route(req, res) {
         channels: listChannelsFor(me.name),
         missions: Object.values(db.missions).filter(m => canReadMission(me.name, m)).map(m => pubMission(m, me.name)),
         domains: scanDomains().map(({ name, version, description, skills, kbCount }) => ({ name, version, description, skills, kbCount })),
-        backends: listBackends(),
+        backends: CLOUD ? [{ id: 'none', label: '本地 Agent（主动连接）' }] : listBackends(),
         seq: db.seq,
       });
     }
@@ -1205,6 +1313,7 @@ async function route(req, res) {
       if (!t) return json(res, 404, { error: '任务不存在' });
       const guard = workflow.canReport(t, me.name);
       if (!guard.ok) return json(res, 403, { error: guard.reason });
+      if (remote.hasLease(t.id)) return json(res, 409, { error: '任务由远程 worker 执行，请通过作业完成接口提交' });
       const r = workflow.transition(t, 'report', { text: body.text, by: me.name });
       if (!r.ok) return json(res, 400, { error: r.reason });
       db.tasks[t.id] = r.task;
@@ -1271,7 +1380,7 @@ async function route(req, res) {
     /* ---- 事件流：长轮询（外部 runtime / CLI）---- */
     if (p === '/api/events' && method === 'GET') {
       let since = Number(u.searchParams.get('since')) || 0;
-      const waitMs = Math.min(Number(u.searchParams.get('wait')) || 0, 25) * 1000;
+      const waitMs = CLOUD ? 0 : Math.min(Number(u.searchParams.get('wait')) || 0, 25) * 1000;
       const deadline = Date.now() + waitMs;
       for (;;) {
         const markDelivered = (evts) => {
@@ -1317,11 +1426,12 @@ async function route(req, res) {
 
     /* ---- 事件流：SSE（网页）---- */
     if (p === '/api/stream' && method === 'GET') {
+      if (CLOUD) return json(res, 409, { error: '云端使用 /api/events 短轮询' });
       res.writeHead(200, {
         'content-type': 'text/event-stream',
         'cache-control': 'no-cache',
         connection: 'keep-alive',
-        'access-control-allow-origin': '*',
+        ...(!PRODUCTION ? { 'access-control-allow-origin': '*' } : {}),
       });
       res.write(':ok\n\n');
       const client = { res, name: me.name };
@@ -1344,7 +1454,7 @@ async function route(req, res) {
     return json(res, 404, { error: 'not found', hint: '见 README 的 API 文档' });
   } catch (e) {
     console.error('[api]', p, e);
-    return json(res, 500, { error: e.message });
+    return json(res, 500, { error: PRODUCTION ? '服务暂时不可用，请稍后重试' : e.message });
   }
 }
 
@@ -1363,6 +1473,7 @@ function filterDomains(list) {
 function pubAgent(a) {
   return {
     name: a.name, kind: a.kind, persona: a.persona, hue: a.hue,
+    isAdmin: !!a.isAdmin,
     online: isOnline(a), hasWebhook: !!a.webhookUrl, createdAt: a.createdAt,
     owner: a.owner || null, domains: a.domains || [],
     adapter: a.kind === 'agent' ? { kind: a.adapter?.kind || 'none' } : undefined,
@@ -1422,17 +1533,51 @@ function lanUrls(port) {
   return out;
 }
 
+if (!CLOUD) {
 loadDb();
 fs.mkdirSync(DATA_DIR, { recursive: true });
-const server = http.createServer((req, res) => { route(req, res).catch((e) => json(res, 500, { error: e.message })); });
+const server = http.createServer((req, res) => { route(req, res).catch((e) => json(res, 500, { error: PRODUCTION ? '服务暂时不可用' : e.message })); });
 server.listen(PORT, () => {
   const healed = engine.heal(); // 崩溃自愈：把 working 的 job 放回队列
   console.log(`SciTag 已启动  本机 http://127.0.0.1:${PORT}${healed ? `（恢复 ${healed} 个中断任务）` : ''}`);
   for (const url of lanUrls(PORT)) console.log(`              同一局域网/组网内可访问  ${url}`);
-  console.log(`课题组演示账号 token：demo-jiaoshou / demo-wangyan / demo-liyan（agent：demo-deepseekv4 / demo-codex-sol）`);
+  if (!PRODUCTION) console.log(`课题组演示账号 token：demo-jiaoshou / demo-wangyan / demo-liyan（agent：demo-deepseekv4 / demo-codex-sol）`);
 });
 for (const sig of ['SIGINT', 'SIGTERM']) {
   process.on(sig, () => { saveNow(); process.exit(0); });
+}
+}
+
+// A single instance also serializes its requests because the legacy domain model uses
+// one db reference. Other instances coordinate through the database revision CAS.
+let cloudTail = Promise.resolve();
+export async function handleCloud(request, backend) {
+  const previous = cloudTail;
+  let release;
+  cloudTail = new Promise(resolve => { release = resolve; });
+  await previous;
+  try {
+    const bytes = Buffer.from(await request.arrayBuffer());
+    if (bytes.length > BODY_LIMIT) return Response.json({ error: '请求过大' }, { status: 413 });
+    return await (backend || makeCloudStore()).transact(async snapshot => {
+      db = snapshot || defaultDb();
+      cloudDirty = false;
+      if (!snapshot) seedProduction();
+      db.remoteJobs ||= [];
+      const url = new URL(request.url);
+      const req = Readable.from(bytes.length ? [bytes] : []);
+      Object.assign(req, { url: url.pathname + url.search, method: request.method,
+        headers: Object.fromEntries(request.headers) });
+      let status = 500, headers = {}, output = '';
+      const res = { writeHead(code, values) { status = code; headers = values; }, end(body = '') { output = body; } };
+      await route(req, res);
+      return { state: db, dirty: cloudDirty,
+        response: new Response(status === 204 ? null : output || null, { status, headers: { ...headers, 'cache-control': 'no-store' } }) };
+    });
+  } catch (error) {
+    console.error('[cloud]', error.message);
+    return Response.json({ error: '共享存储暂时不可用，请稍后重试' }, { status: 503 });
+  } finally { release(); }
 }
 
 export { engine };
