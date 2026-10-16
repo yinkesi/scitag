@@ -4,8 +4,34 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { executeLocal } from './worker-executors.mjs';
-import { runWorker } from './worker.mjs';
+import { runWorker, configureWorkerNetwork } from './worker.mjs';
 import http from 'node:http';
+import net from 'node:net';
+
+test('worker uses a configured proxy and bypasses it for loopback', { skip: typeof http.setGlobalProxyFromEnv !== 'function' }, async t => {
+  let proxied = 0;
+  const proxy = http.createServer((req, res) => { proxied++; res.end('proxied'); });
+  const direct = http.createServer((req, res) => res.end(req.headers.host.includes('scitag-proxy-test') ? 'proxied' : 'direct'));
+  const sockets = new Set();
+  proxy.on('connect', (req, socket, head) => {
+    proxied++;
+    const upstream = net.connect(direct.address().port, '127.0.0.1', () => {
+      socket.write('HTTP/1.1 200 Connection Established\r\n\r\n');
+      if (head.length) upstream.write(head);
+      socket.pipe(upstream); upstream.pipe(socket);
+    });
+    for (const stream of [socket, upstream]) { sockets.add(stream); stream.on('error', () => {}); stream.on('close', () => sockets.delete(stream)); }
+  });
+  await new Promise(resolve => proxy.listen(0, '127.0.0.1', resolve));
+  await new Promise(resolve => direct.listen(0, '127.0.0.1', resolve));
+  t.after(() => { for (const socket of sockets) socket.destroy(); proxy.closeAllConnections(); proxy.close(); direct.closeAllConnections(); direct.close(); });
+  const restore = configureWorkerNetwork({ HTTP_PROXY: `http://127.0.0.1:${proxy.address().port}` });
+  try {
+    assert.equal(await (await fetch('http://scitag-proxy-test.invalid', { signal: AbortSignal.timeout(3000) })).text(), 'proxied');
+    assert.equal(await (await fetch(`http://127.0.0.1:${direct.address().port}`, { signal: AbortSignal.timeout(3000) })).text(), 'direct');
+    assert.equal(proxied, 1);
+  } finally { restore?.(); }
+});
 
 test('executor sends prompt through stdin, uses configured workspace and respects exit code', async t => {
   const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'scitag-exec-'));

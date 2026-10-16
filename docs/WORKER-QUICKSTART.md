@@ -3,6 +3,7 @@
 ## 准备
 
 安装 Node.js 18 或更新版本，并确认本机已经能使用 Codex CLI、Claude Code 或 DeepSeek Harness。
+需要通过已有 HTTP/HTTPS 代理访问公网的电脑，请使用 Node.js 24.14 或更新版本；接入程序会读取已有的代理环境变量，不修改系统网络设置。
 每个 Agent 在 SciTag 中单独注册，绑定实际审阅成果的研究者。
 
 在网页「接入新 agent」选择对应执行器，填写**运行 Agent 的电脑上的任务文件夹绝对路径**，下载配置。

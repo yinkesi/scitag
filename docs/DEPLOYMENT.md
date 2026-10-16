@@ -1,46 +1,53 @@
 # 云端部署与验收记录
 
-## 目标
+## 当前状态（2026-10-16）
 
-Vercel 团队 `yinkesi1` 的独立项目 `scitag`，Supabase 组织 `yinkesi's Org` 中的独立项目 `scitag`。
-不复用、恢复或修改已有 `shiyanshiji` 项目。
+正式网址：<https://scitag-yinkesi1.vercel.app>（另有 <https://scitag.vercel.app>）。
 
-## 已完成
+Vercel 团队 `yinkesi1` 的 `scitag` 项目已正式部署，函数运行于 Singapore。
+Supabase 组织 `yinkesi's Org` 中的独立 `scitag` 项目已创建并接通，项目 ID 为 `hvihnososqenvehwxapl`，区域 Singapore。
+之前创建接口的参数冲突已解除。没有修改原有 `shiyanshiji` 项目。
 
-- Vercel 项目已创建并成功构建，静态页面返回 HTTP 200。
-- 已设置无状态运行模式和随机管理员/数据库应用凭据。真实凭据仅保存在本机忽略目录与 Vercel 加密环境中。
-- 初始化 SQL：`supabase/scitag.sql`；数据表启用 RLS，浏览器不能直接读取共享快照。
-- 两个独立服务模块、实际 HTTP 请求、本地子进程、驳回重做、审批回群与群聊回传的集成检查通过。
-- 浏览器已验证正式环境隐藏演示快捷登录、注册本地 Agent、选择三种执行器、配置下载入口及轮询更新。
-- 完整 `npm test`：基础 46、边界 21、模块 33、回归 119，全部通过（Windows / Node 24）。
-- 本机 Codex 与 DeepSeek Harness 实际读取测试文件成功。Claude Code 在 90 秒探测窗口内未完成；尚未确认根因，未修改其全局登录、模型或网络配置。
+## 已验证
 
-## 尚未完成的基础设施
+- 正式配置返回 `ready: true`，健康接口正常，浏览器实际登录成功。
+- 云端验收 16 项通过：匿名访问与注册拒绝、管理员登录、并发独占领取、其他 Agent 越权提交拒绝、本地子进程读文件、成果回传去重、主人驳回、重启 worker 重做、批准回群、真实模型执行和课题结题。
+- 本机 Codex CLI、DeepSeek Harness 均实际通过公网领取任务、读取各自工作目录中的样本、回传报告并经主人批准。
+- 验收课题保留在私有群「云端部署验收」，便于复核。任务执行状态保存在真实 Supabase 数据库。
+- 完整本地 `npm test`：基础 46、边界 21、模块 34、回归 119，共 220 项通过（Windows / Node 24）。
+- 浏览器已检查登录、Agent 注册、执行器选择、配置下载入口和轮询回传。接入程序下载包由源文件重建并核对。
+- 已增加本机现有 HTTP/HTTPS 代理支持，使用 Node 24.14+ 的[原生接口](https://nodejs.org/api/http.html#httpsetglobalproxyfromenvproxyenv)，不修改系统网络设置；代理转发和回环直连都有测试。
 
-Supabase 新建项目工具存在客户端与服务器 schema 冲突：
+## 数据访问与凭据
 
-- 传入工具声明要求的 `confirm_cost_id`，服务端报 `Unrecognized key: confirm_cost_id`。
-- 不传该字段，客户端报 `Missing required property: confirm_cost_id`。
-- `get_cost`、`confirm_cost` 返回工具未提供；组织信息可读取，当前套餐确认为 Free。
-- 备用网页入口要求本人账号登录。连接器 OAuth 不等于浏览器登录。
+共享状态位于未暴露给 Data API 的 `scitag_private.scitag_state` 表，启用 RLS，直接访问策略为拒绝。
+匿名角色和已认证角色都没有直接读取表的权限。公开 RPC 是无提权包装函数；内部函数校验独立的 256 位应用密钥。
+已实测：错误应用密钥被拒绝、正确密钥可访问、过期 revision 写入返回 false。Supabase 安全检查未发现告警。
 
-因此尚未创建 Supabase `scitag`、执行真实数据库 SQL 或完成真实异地验收。
-当前 Vercel 页面是部署预览；共享 API 在存储未配置时返回 503，不能当成已上线协作服务。
+真实管理员凭据、应用密钥和 Agent 配置仅保存在忽略目录与 Vercel 加密环境中，不提交 Git、不发到群聊。
+本机登录说明：`data/cloud-access.private.md`；部署配置：`data/cloud-deployment.private.json`。
+每台电脑应创建自己的 Agent 和配置，不复制管理员凭据给 Agent。
 
-## 项目可创建后完成的步骤
+## 本机与其他电脑
 
-1. 在用户指定的组织创建 `scitag`，选择免费方案和 Singapore；确认没有新增付费资源。
-2. 将 `supabase/scitag.sql` 中的 `__SCITAG_SECRET_SHA256__` 替换为本机部署配置中 `databaseSecretDigest`，通过 `apply_migration` 建表与函数。
-3. 验证不带应用密钥的 RPC 和匿名直接表访问被拒绝，正确应用密钥可以读取快照，旧 revision 提交返回 false。运行 Supabase 安全检查。
-4. 在 Vercel 设置 `SUPABASE_URL`、`SUPABASE_PUBLISHABLE_KEY`；保持 `SCITAG_DATABASE_SECRET` 与 SQL 中摘要对应。
-5. 重新部署当前提交，检查健康接口、正式管理员登录、注册与私有群权限，再连接两个真实本地 worker 完成派发与审阅闭环。
+本机已生成 `.scitag-workers/worker.codex.json`、`worker.claude.json`、`worker.deepseek.json`。
+完成验收后不常驻运行测试 worker；需要工作时可双击对应的 `start-*.bat` 或按接入说明启动。
+其他电脑在网页注册独立 Agent，下载接入程序与配置后运行即可；见[接入步骤](WORKER-QUICKSTART.md)。
 
-数据库密码是 Supabase 项目的运维凭据，本应用通过独立的随机应用密钥访问 RPC，不把数据库密码交给浏览器或 Agent。
+Claude Code 的接入实现和配置已提供；之前本机模型调用在 90 秒探测窗口内未完成，尚未宣称通过真实模型验收，未修改其全局登录、模型或网络配置。
+本次真实执行验收使用同一台 Windows 电脑上的独立本地执行器与云端服务；尚未在第二台物理电脑上操作。
 
-## 部署与恢复
+本机文件不自动共享给其他电脑，首版自动交接报告文本。代码、数据与二进制成果需要另外通过双方授权的 Git 或私有存储交接。
+这是适合小课题组的共享快照方案，版本条件写入可防止并发覆盖；大规模使用需要按实体分表，减少整份快照的传输与写入。
 
-源文件部署时只包含应用代码、`public/` 与域包的元数据/知识库/技能；不上传 `data/`、环境文件、真实科研数据表和图片。
-接入程序下载包由 `python scripts/build-worker-client.py` 生成，修改 worker 后应重新生成。
+## 部署、复核与恢复
 
-本版本没有修改原有本地数据库格式，新增 `remoteJobs` 为可选字段。回退到旧代码前先停用 worker 并备份共享状态，防止未完成租约产生重复本地副作用。
-Supabase 共享快照没有独立的自动备份策略；正式长期使用前应配置符合实际套餐的备份或定期私有导出。
+初始化 SQL：`supabase/scitag.sql`。Vercel 环境使用 `SUPABASE_URL`、`SUPABASE_PUBLISHABLE_KEY`、`SCITAG_DATABASE_SECRET`、`SCITAG_ADMIN_NAME`、`SCITAG_ADMIN_TOKEN` 和 `SCITAG_SERVERLESS=1`。
+部署只包含代码、`public/` 和域包的元数据/知识库/技能，不上传本地数据目录、环境文件、真实科研数据表和图片。
+
+- `python scripts/build-worker-client.py`：重新生成下载包。
+- `npm test`：本地回归验证。
+- `node scripts/verify-cloud.mjs --models`：显式运行线上验收，会创建带标签的私有验收课题并调用本机 Codex、DeepSeek。不要放入自动 CI。
+
+回退前应停用 worker 并备份共享状态，防止未完成租约产生重复本地副作用。
+共享快照未额外配置自动备份任务；长期使用应根据实际套餐配置备份或定期私有导出。

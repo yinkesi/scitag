@@ -4,6 +4,22 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { executeLocal } from './worker-executors.mjs';
+import http from 'node:http';
+
+/** Honor the computer owner's existing proxy configuration without changing it.
+ * https://nodejs.org/api/http.html#httpsetglobalproxyfromenvproxyenv
+ * Older Node releases keep their direct-network behavior; proxied clients need
+ * Node 24.14+ for this built-in, dependency-free support.
+ */
+export function configureWorkerNetwork(env = process.env) {
+  if (env.NODE_USE_ENV_PROXY === '0' || typeof http.setGlobalProxyFromEnv !== 'function') return null;
+  const httpProxy = env.http_proxy || env.HTTP_PROXY;
+  const httpsProxy = env.https_proxy || env.HTTPS_PROXY;
+  if (!httpProxy && !httpsProxy) return null;
+  return http.setGlobalProxyFromEnv({ HTTP_PROXY: httpProxy, HTTPS_PROXY: httpsProxy,
+    NO_PROXY: [env.no_proxy || env.NO_PROXY || '', 'localhost', '127.0.0.1', '::1'].filter(Boolean).join(',') });
+}
+configureWorkerNetwork();
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 function writeJson(file, value) {
