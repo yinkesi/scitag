@@ -8,6 +8,7 @@ import { promisify } from 'node:util';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 test('relay preserves authentication, path and errors without exposing a general URL proxy', async () => {
   let calls = 0;
@@ -94,4 +95,20 @@ test('oversized local requests are rejected before reaching the remote gateway',
   const response = await fetch(gateway.url + '/api/register', { method: 'POST', headers: { 'content-type': 'application/json' }, body: 'x'.repeat(256001) });
   assert.equal(response.status, 413);
   assert.equal(calls, 0);
+});
+
+test('bundled interface assets render without remote resource requests while API stays remote', async t => {
+  let calls = 0;
+  const gateway = await startGateway('https://example.com/relay', { assetDirectory: fileURLToPath(new URL('./public/', import.meta.url)),
+    fetcher: async () => { calls++; throw new Error('offline'); } });
+  t.after(() => { gateway.server.closeAllConnections(); gateway.server.close(); });
+  for (const [route, type, marker] of [['/', 'text/html', '把研究'], ['/style.css', 'text/css', '.gate'], ['/app.js', 'text/javascript', 'configReady'], ['/brand.svg', 'image/svg+xml', '<svg']]) {
+    const response = await fetch(gateway.url + route);
+    assert.equal(response.status, 200);
+    assert.ok(response.headers.get('content-type').startsWith(type));
+    assert.ok((await response.text()).includes(marker));
+  }
+  assert.equal(calls, 0);
+  assert.equal((await fetch(gateway.url + '/api/config')).status, 502);
+  assert.equal(calls, 1);
 });

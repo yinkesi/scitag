@@ -10,7 +10,7 @@ const S = {
   es: null,
   sidebarMode: 'talk', navigation: [], navigationIndex: -1,
 };
-const configReady = fetch('/api/config').then(r => {
+const configReady = (location.protocol === 'file:' ? Promise.reject(new Error('请使用网页启动器打开本机网址')) : fetch('/api/config', { signal: AbortSignal.timeout(15000) })).then(r => {
   if (!r.ok) throw new Error('无法读取服务配置');
   return r.json();
 }).then(config => {
@@ -891,4 +891,4 @@ function connectSSE() {
 initializeShellUI();
 if (S.token && S.name) boot().catch(error => { toast(error.message, true); $('gate').classList.remove('hidden'); $('app').classList.add('hidden'); });
 else $('gate').classList.remove('hidden');
-configReady.catch(error => toast(error.message, true));
+configReady.then(() => window.scitagEntry?.ready(), error => { window.scitagEntry?.fail('无法连接协作服务，请运行接入包的“检查连接”，或重新启动网页入口。'); toast(error.message, true); });

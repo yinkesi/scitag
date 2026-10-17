@@ -2,7 +2,7 @@
 // never an arbitrary URL proxy. No platform/database secret is used here.
 export function createRelay({ upstream = 'https://scitag-yinkesi1.vercel.app', fetcher = fetch } = {}) {
   const origin = new URL(upstream).origin;
-  const assets = new Set(['/', '/index.html', '/app.js', '/workspace.js', '/style.css', '/brand.svg', '/worker-client.zip']);
+  const assets = new Set(['/', '/index.html', '/app.js', '/workspace.js', '/entry.js', '/style.css', '/brand.svg', '/worker-client.zip']);
   return async function relay(request) {
     const url = new URL(request.url);
     const pathname = url.pathname.replace(/^\/(?:functions\/v1\/)?scitag-relay(?=\/|$)/, '') || '/';

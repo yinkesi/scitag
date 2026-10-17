@@ -1,14 +1,21 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" class="scitag-loading">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#fafaf9">
   <title>SciTag · 科研工作台</title>
+  <style>
+    .scitag-loading #gate,.scitag-loading #app,.scitag-loading #modal,.scitag-loading #toast{display:none!important}
+    .icon-definitions{position:absolute;width:0;height:0;overflow:hidden}
+    #startupNotice{box-sizing:border-box;position:fixed;inset:0;z-index:200;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:32px;background:#fafaf9;color:#292929;font:15px/1.7 system-ui,"Microsoft YaHei",sans-serif;text-align:center}
+    #startupNotice[hidden]{display:none}#startupNotice strong{font-size:24px}#startupNotice p{max-width:480px;margin:0}#startupReload{padding:9px 18px;border:1px solid #ddd;border-radius:9px;background:white;cursor:pointer}
+  </style>
   <link rel="icon" href="brand.svg" type="image/svg+xml">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
+  <div id="startupNotice" role="status"><strong>SciTag</strong><p id="startupMessage">正在打开协作工作台…</p><button id="startupReload" hidden onclick="location.reload()">重新加载</button><noscript>请在支持 JavaScript 的浏览器中打开此页面。</noscript></div>
   <svg class="icon-definitions" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs>
     <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 6h16M4 12h12M4 18h8"/></symbol>
     <symbol id="i-panel" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M14 4v16"/></symbol>
@@ -104,6 +111,7 @@
   </div></div>
   <div id="modal" class="modal-mask hidden" role="dialog" aria-modal="true" aria-label="工作台详情"><div class="modal" id="modalBody"></div></div>
   <div id="toast" class="hidden" role="status" aria-live="polite"></div>
+  <script src="entry.js" onerror="document.getElementById('startupMessage').textContent='界面资源加载失败，请重新解压完整接入包并运行网页启动器。'"></script>
   <script src="workspace.js"></script>
   <script src="app.js"></script>
 </body>

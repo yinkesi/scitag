@@ -8,8 +8,11 @@ import { executeLocal } from './worker-executors.mjs';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const types = { '/': 'text/html; charset=utf-8', '/index.html': 'text/html; charset=utf-8',
-  '/app.js': 'text/javascript; charset=utf-8', '/workspace.js': 'text/javascript; charset=utf-8',
+  '/app.js': 'text/javascript; charset=utf-8', '/workspace.js': 'text/javascript; charset=utf-8', '/entry.js': 'text/javascript; charset=utf-8',
   '/style.css': 'text/css; charset=utf-8', '/brand.svg': 'image/svg+xml', '/worker-client.zip': 'application/zip' };
+const browserHeaders = { 'cache-control': 'no-store', 'x-content-type-options': 'nosniff',
+  'x-frame-options': 'DENY', 'referrer-policy': 'no-referrer',
+  'content-security-policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'" };
 
 export function connectionURL(server, pathname) {
   const base = new URL(server);
@@ -19,8 +22,9 @@ export function connectionURL(server, pathname) {
   return base.origin + base.pathname.replace(/\/$/, '') + pathname;
 }
 
-export async function startGateway(server, { fetcher = fetch } = {}) {
+export async function startGateway(server, { fetcher = fetch, assetDirectory = path.join(root, 'ui') } = {}) {
   connectionURL(server, '/');
+  const localAssets = assetDirectory && fs.existsSync(assetDirectory) ? path.resolve(assetDirectory) : null;
   const gateway = http.createServer(async (req, res) => {
     const origin = `http://127.0.0.1:${gateway.address().port}`;
     const fail = (status, error) => { if (res.destroyed || res.writableEnded) return; res.writeHead(status, { 'content-type': 'application/json; charset=utf-8' }); res.end(JSON.stringify({ error })); };
@@ -30,6 +34,14 @@ export async function startGateway(server, { fetcher = fetch } = {}) {
     try { url = new URL(req.url, origin); } catch { return fail(400, '请求地址无效'); }
     if (url.origin !== origin || (!url.pathname.startsWith('/api/') && !Object.hasOwn(types, url.pathname))) return fail(404, '入口不存在');
     try {
+      if (req.method === 'GET' && localAssets && Object.hasOwn(types, url.pathname) && url.pathname !== '/worker-client.zip') {
+        const file = path.join(localAssets, url.pathname === '/' ? 'index.html' : url.pathname.slice(1));
+        let body;
+        try { body = await fs.promises.readFile(file); }
+        catch { return fail(503, '接入包界面文件缺失，请重新解压完整接入包后启动'); }
+        res.writeHead(200, { ...browserHeaders, 'content-type': types[url.pathname] });
+        return res.end(body);
+      }
       const chunks = []; let size = 0;
       for await (const chunk of req) {
         size += chunk.length;
@@ -46,9 +58,7 @@ export async function startGateway(server, { fetcher = fetch } = {}) {
       // Supabase deliberately marks Edge HTML as a non-executable download.
       // This loopback web origin owns its own policy; all resources and API
       // calls stay on this origin, with no third-party scripts or frames.
-      const outputHeaders = { 'content-type': contentType, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff',
-        'x-frame-options': 'DENY', 'referrer-policy': 'no-referrer',
-        'content-security-policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'" };
+      const outputHeaders = { ...browserHeaders, 'content-type': contentType };
       let body = Buffer.from(await response.arrayBuffer());
       if (url.pathname === '/api/config' && response.ok) {
         body = Buffer.from(JSON.stringify({ ...JSON.parse(body.toString()), workerServer: server }));
@@ -95,7 +105,7 @@ async function main() {
     if (!selection) selection = (await input.question('SciTag 接入\n1 打开协作网页\n2 启动 Codex\n3 启动 Claude Code\n4 启动 DeepSeek\n5 网络与本机检查\n请选择：')).trim();
     if (selection === '5') { if (!await diagnose(connection)) process.exitCode = 1; return; }
     if (selection === '1') {
-      const gateway = await startGateway(connection.server);
+      const gateway = await startGateway(connection.server, { assetDirectory: fs.existsSync(path.join(root, 'ui')) ? path.join(root, 'ui') : path.join(root, 'public') });
       console.log(`请在浏览器打开：${gateway.url}\n使用“登录凭据.txt”登录。保留此窗口；Ctrl+C 关闭。`);
       process.once('SIGINT', () => { gateway.server.closeAllConnections(); gateway.server.close(); });
       return;

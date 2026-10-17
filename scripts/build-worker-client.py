@@ -10,6 +10,8 @@ files = {
     'connection.json': root / 'scripts/client-connection.json',
     '使用说明.md': root / 'docs/WORKER-QUICKSTART.md',
 }
+for name in ['index.html', 'style.css', 'entry.js', 'app.js', 'workspace.js', 'brand.svg']:
+    files['ui/' + name] = root / 'public' / name
 with ZipFile(root / 'public/worker-client.zip', 'w', compression=ZIP_DEFLATED) as archive:
     for name, source in files.items():
         info = ZipInfo(name, date_time=(2026, 1, 1, 0, 0, 0))

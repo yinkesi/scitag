@@ -41,6 +41,7 @@ const destination = path.join(os.homedir(), 'Desktop', `SciTag-${recipient.name}
 fs.mkdirSync(destination, { recursive: true });
 const files = {};
 for (const name of ['worker.mjs', 'worker-executors.mjs', 'connect.mjs']) files[name] = fs.readFileSync(path.join(root, name));
+for (const name of ['index.html', 'style.css', 'entry.js', 'app.js', 'workspace.js', 'brand.svg']) files['ui/' + name] = fs.readFileSync(path.join(root, 'public', name));
 files['使用说明.md'] = fs.readFileSync(path.join(root, 'docs/WORKER-QUICKSTART.md'));
 files['connection.json'] = JSON.stringify({ server, directServer: cloud.productionUrl }, null, 2);
 for (const executor of ['codex', 'claude', 'deepseek']) {
@@ -53,10 +54,12 @@ for (const [name, args] of Object.entries(launchers)) {
 }
 files['登录凭据.txt'] = `SciTag 个人登录凭据\r\n账号（名字）：${recipient.name}\r\n访问凭据：${recipient.token}\r\n\r\n首选：双击“打开协作网页.cmd”，在浏览器打开终端显示的本机网址。\r\n备用原网址：${cloud.productionUrl}\r\n\r\n本包只交给该账号对应的一位协作者。凭据是明文，不要公开、发群或提交 Git。\r\n`;
 files['先看这里.txt'] = `SciTag 协作接入包 · 修复版\r\n\r\n已包含你的账号、三个独立 Agent 配置和启动器，不需要先上网页下载 JSON。\r\n\r\n1. 将 ZIP 的所有文件解压到一个目录；这个目录中能直接看到“启动接入.cmd”。\r\n2. 安装 Node.js 18 或更新版本；依赖 HTTP/HTTPS 代理的电脑需要 24.14+。\r\n3. 双击“打开协作网页.cmd”，复制窗口显示的 http://127.0.0.1:端口 到浏览器。\r\n   使用“登录凭据.txt”的账号和凭据登录。这个入口经 Supabase 转到同一个平台，不要求浏览器直接访问 vercel.app。\r\n4. 需要本机 Agent 做任务时，另开“启动Codex.cmd”“启动Claude.cmd”或“启动DeepSeek.cmd”。\r\n   本机必须已安装对应 CLI、完成登录，并有自己的模型额度。\r\n   默认在接入包的 workspace 子目录做任务；启动时也可输入你自己的现有任务文件夹。\r\n5. 保持两个终端窗口和电脑联网；Ctrl+C 停止。不要在受限 Agent 沙箱内启动，用 Windows 普通终端或双击启动器。\r\n\r\n连不上时：双击“检查连接.cmd”，它会分别检查备用入口和原网址，并检查本机能否启动子进程。\r\n备用域名仍需该电脑的网络实际允许访问；若两条路都不通，需要电脑主人配置已有的合规代理或使用可访问的网络。\r\n\r\n权限：Codex 默认只读沙箱；Claude 默认仅 Read/Glob/Grep 且禁用 MCP/技能/钩子，但不等同操作系统隔离；\r\nDeepSeek 沿用本机 profile 的权限，首次启动需由电脑主人明确确认。请勿对不信任的服务器开放主力工作目录或高权限工具。\r\n文件不会自动同步，目前回传文字报告。Claude 接入预设已支持，模型实跑仍未验收通过。\r\n\r\n本包只给一位协作者；多人使用需要分别建立账号和配置。不要发群或提交 Git。\r\n`;
+files['先看这里.txt'] += '\r\n界面资源位于 ui 子目录，请完整保留。更新时先关闭旧的网页启动窗口，再启动新版并打开新窗口显示的网址；不要直接双击 ui/index.html。\r\n';
 for (const [name, value] of Object.entries(files)) {
   for (const key of ['adminToken', 'databaseSecret', 'supabasePublishableKey']) {
     if (cloud[key]) assert.ok(!value.toString().includes(cloud[key]), 'Excluded platform credential');
   }
+  fs.mkdirSync(path.dirname(path.join(destination, name)), { recursive: true });
   fs.writeFileSync(path.join(destination, name), value, { mode: 0o600 });
 }
 // The recipient may already have a workspace or local notes beside the client.
