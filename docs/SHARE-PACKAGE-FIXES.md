@@ -39,3 +39,20 @@ Edge 函数只转发到固定 SciTag 上游，不接受自选目标；只开放�
 本机已通过备用入口实际执行 Codex 文件读取、回传和主人审批发布，私有记录 `data/relay-verification.private.json` 保留任务标识。Claude Code 的本地模型执行仍未验收通过；不将其描述为已跑通。协作者原电脑尚未由本次操作直接控制或复测。
 
 官方行为依据：[Supabase 自定义函数认证](https://supabase.com/docs/guides/functions/auth)、[Claude CLI 工具限制](https://code.claude.com/docs/en/cli-reference)、[DeepSeek 沙箱与组合边界](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/sandbox/README.md)。参数同时对照本机 CLI `--help`，DeepSeek headless 当前没有统一 `--sandbox` 参数。
+
+## 第二次复查与实际 ZIP 验收
+
+再次检查发现并复现了以下边界问题，已补测试和修复：
+
+- HTTP 200 的 HTML、缺少作业字段、缺少完成确认的 JSON 不应视为成功。现在只有明确的 `ok: true` 才清理已保存成果；异常响应保留 pending，重启可续传而不重跑。
+- 已完成成果的续传不应依赖本地 CLI 仍然可用。现在先恢复回传，再检查新任务所需的本机执行环境。
+- 心跳确认按真实协议验证 `expiresAt`，不依赖两台电脑时钟相同。计时测试覆盖有效续租延长安全期限、无效响应不会延长期限。
+- 本机入口遇到非法请求地址返回 400，进程继续服务；过大请求在远程转发前返回 413。
+- 网络诊断未就绪会返回非零退出状态，不再只有日志显示失败而退出码仍为成功。
+- 已使用的接入目录会包含 workspace 或本地笔记。打包改成严格的文件清单，允许目录存在，并确保它们不进入 ZIP。
+
+完整本地检查增加到 **235 项通过**：46 基础、21 边界、49 模块/远程、119 回归。此数字是本次复查结果，前文 228 为上一轮记录。
+
+关闭验收进程的所有代理环境变量后，Supabase 备用入口直连返回 200/ready=true，原 Vercel 网址在 8 秒内超时。这是本机当前网络的观测，不能代替协作者原电脑复测。
+
+从实际个人 ZIP 解压到带中文和空格的独立目录，从另一工作目录启动包内 `connect.mjs --executor codex --once`，使用默认 workspace，关闭 Node 环境代理，完成真实 Codex 读样本、回传、协作者审批及验收课题结题。包内网页启动器在同样的 Node 代理关闭条件下成功登录；私有证据 `data/second-pass-verification.private.json` 保留任务标识。

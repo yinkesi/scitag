@@ -59,7 +59,8 @@ for (const [name, value] of Object.entries(files)) {
   }
   fs.writeFileSync(path.join(destination, name), value, { mode: 0o600 });
 }
-assert.deepEqual(fs.readdirSync(destination).sort(), Object.keys(files).sort());
-const zip = spawnSync('python', ['-c', 'import pathlib,sys,zipfile; p=pathlib.Path(sys.argv[1]); z=zipfile.ZipFile(str(p)+".zip","w",compression=zipfile.ZIP_DEFLATED); [z.write(f,f.name) for f in sorted(p.iterdir()) if f.is_file()]; z.close()', destination], { windowsHide: true, encoding: 'utf8' });
+// The recipient may already have a workspace or local notes beside the client.
+// Only the explicit delivery manifest belongs in the ZIP, never adjacent data.
+const zip = spawnSync('python', ['-c', 'import json,pathlib,sys,zipfile; p=pathlib.Path(sys.argv[1]); names=json.loads(sys.argv[2]); z=zipfile.ZipFile(str(p)+".zip","w",compression=zipfile.ZIP_DEFLATED); [z.write(p/n,n) for n in sorted(names)]; z.close()', destination, JSON.stringify(Object.keys(files))], { windowsHide: true, encoding: 'utf8' });
 if (zip.status !== 0) throw new Error('压缩失败：' + zip.stderr);
 console.log(JSON.stringify({ archive: destination + '.zip', account: recipient.name, agents: Object.values(agents).map(item => item.name), files: Object.keys(files).length, server, loginVerified: true }));

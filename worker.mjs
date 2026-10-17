@@ -37,14 +37,6 @@ export async function runWorker(config, { once = false, signal, execute = execut
   const identity = crypto.createHash('sha256').update(server.origin + config.token).digest('hex').slice(0, 20);
   const directory = path.resolve(config.stateDirectory || path.join(os.homedir(), '.scitag', 'workers', identity));
   fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
-  // Fail locally before taking a task if the host blocks piped subprocesses.
-  if (execute === executeLocal) {
-    executorCommand(config, path.join(directory, 'preflight.answer.md'));
-    const probe = await executeLocal({ workspace: config.workspace, executor: 'command',
-      command: [process.execPath, '-e', 'process.stdin.resume();process.stdin.on("end",()=>console.log("SCITAG-PREFLIGHT"))'], timeoutMs: 5000 },
-    { id: 'preflight', prompt: '' }, directory, signal);
-    if (probe.failed) throw new Error('本机启动检查失败，尚未领取远程任务。' + probe.text);
-  }
   const lock = path.join(directory, 'worker.lock');
   if (fs.existsSync(lock)) {
     const pid = Number(fs.readFileSync(lock, 'utf8'));
@@ -56,17 +48,25 @@ export async function runWorker(config, { once = false, signal, execute = execut
   fs.writeFileSync(lock, String(process.pid), { flag: 'wx', mode: 0o600 });
   const pendingFile = path.join(directory, 'pending.json');
   const workerId = config.workerId || os.hostname().replace(/[^\w.-]/g, '_').slice(0, 50) + '-' + identity;
+  const invalidResponse = message => Object.assign(new Error(message), { status: 502 });
   async function api(endpoint, body) {
     const response = await fetch(server.origin + server.pathname.replace(/\/$/, '') + endpoint, { method: 'POST', redirect: 'error',
       headers: { 'content-type': 'application/json', authorization: 'Bearer ' + config.token },
       body: JSON.stringify(body), signal: AbortSignal.timeout(20000) });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw Object.assign(new Error(data.error || `HTTP ${response.status}`), { status: response.status });
+    let data;
+    try { data = await response.json(); }
+    catch {
+      if (!response.ok) throw Object.assign(new Error(`HTTP ${response.status}`), { status: response.status });
+      throw invalidResponse('服务器响应不是有效 JSON，未确认操作成功');
+    }
+    if (!response.ok) throw Object.assign(new Error(typeof data?.error === 'string' ? data.error : `HTTP ${response.status}`), { status: response.status });
+    if (!data || typeof data !== 'object' || Array.isArray(data)) throw invalidResponse('服务器响应格式无效，未确认操作成功');
     return data;
   }
   async function submit(pending) {
     try {
-      await api(`/api/worker/jobs/${pending.job.id}/complete`, { leaseToken: pending.job.leaseToken, ...pending.result });
+      const acknowledgement = await api(`/api/worker/jobs/${pending.job.id}/complete`, { leaseToken: pending.job.leaseToken, ...pending.result });
+      if (acknowledgement.ok !== true) throw invalidResponse('服务器未确认成果接收，结果保留在本机');
     } catch (error) {
       if (![404, 409].includes(error.status)) throw error;
       writeJson(path.join(directory, pending.job.id + '.stale.json'), pending);
@@ -79,7 +79,8 @@ export async function runWorker(config, { once = false, signal, execute = execut
     log(`[worker] 已回传 ${pending.job.id}`);
   }
   try {
-    log(`[worker] 已连接 ${server.origin}，执行器 ${config.executor}`);
+    log(`[worker] 正在连接 ${server.origin}，执行器 ${config.executor}`);
+    let ready = execute !== executeLocal, connected = false;
     while (!signal?.aborted) {
       try {
         if (fs.existsSync(pendingFile)) {
@@ -92,9 +93,24 @@ export async function runWorker(config, { once = false, signal, execute = execut
           if (once) break;
         }
         if (signal?.aborted) break;
-        const { job } = await api('/api/worker/jobs/claim', { workerId });
-        if (!job) { if (once) break; await sleep(config.pollMs || 5000); continue; }
-        if (!/^r_[a-f0-9]{24}$/.test(job.id) || typeof job.prompt !== 'string' || job.prompt.length > 256000 ||
+        // Upload completed journal entries before requiring an installed CLI.
+        // New tasks still require a local subprocess check before claiming.
+        if (!ready) {
+          try {
+            executorCommand(config, path.join(directory, 'preflight.answer.md'));
+            const probe = await executeLocal({ workspace: config.workspace, executor: 'command',
+              command: [process.execPath, '-e', 'process.stdin.resume();process.stdin.on("end",()=>console.log("SCITAG-PREFLIGHT"))'], timeoutMs: 5000 },
+            { id: 'preflight', prompt: '' }, directory, signal);
+            if (probe.failed) throw new Error('本机启动检查失败，尚未领取远程任务。' + probe.text);
+            ready = true;
+          } catch (error) { throw Object.assign(error, { localSetup: true }); }
+        }
+        const claim = await api('/api/worker/jobs/claim', { workerId });
+        if (!Object.hasOwn(claim, 'job')) throw invalidResponse('服务器响应缺少作业字段');
+        const { job } = claim;
+        if (!connected) { log('[worker] 平台连接已确认'); connected = true; }
+        if (job === null) { if (once) break; await sleep(config.pollMs || 5000); continue; }
+        if (!job || typeof job !== 'object' || !/^r_[a-f0-9]{24}$/.test(job.id) || typeof job.prompt !== 'string' || job.prompt.length > 256000 ||
           typeof job.leaseToken !== 'string' || !job.leaseToken || !Number.isSafeInteger(job.leaseMs) || job.leaseMs < 60000 || job.leaseMs > 600000) {
           throw Object.assign(new Error('服务器作业格式或租约时长无效，未执行本机工具'), { status: 400 });
         }
@@ -111,7 +127,10 @@ export async function runWorker(config, { once = false, signal, execute = execut
           if (renewing) return;
           renewing = true;
           try {
-            await api(`/api/worker/jobs/${job.id}/heartbeat`, { leaseToken: job.leaseToken });
+            const acknowledgement = await api(`/api/worker/jobs/${job.id}/heartbeat`, { leaseToken: job.leaseToken });
+            // The heartbeat contract returns expiresAt, whereas completion
+            // returns ok. Do not compare host clocks to the server timestamp.
+            if (!Number.isSafeInteger(acknowledgement.expiresAt) || acknowledgement.expiresAt <= 0) throw invalidResponse('服务器未确认续租');
             if (controller.signal.aborted || finished) return;
             leaseOk = Date.now();
             clearTimeout(deadline);
@@ -129,7 +148,7 @@ export async function runWorker(config, { once = false, signal, execute = execut
         } finally { finished = true; clearInterval(heartbeat); clearTimeout(deadline); signal?.removeEventListener('abort', stop); }
         if (once) break;
       } catch (error) {
-        if ([400, 401, 403].includes(error.status)) throw error;
+        if (error.localSetup || [400, 401, 403].includes(error.status)) throw error;
         log('[worker] 暂时无法通信，保留本地状态后重试：' + error.message);
         if (once) throw error;
         await sleep(5000);

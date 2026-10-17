@@ -3,6 +3,11 @@ import assert from 'node:assert/strict';
 import { createRelay } from './supabase/functions/_shared/relay.mjs';
 import { startGateway } from './connect.mjs';
 import http from 'node:http';
+import { spawnSync, execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 
 test('relay preserves authentication, path and errors without exposing a general URL proxy', async () => {
   let calls = 0;
@@ -58,4 +63,35 @@ test('local gateway preserves relay prefixes, rewrites downloaded config and rej
   });
   assert.equal(status, 403);
   assert.equal(calls, 1);
+});
+
+test('a malformed request target returns 400 without crashing the local gateway', () => {
+  const script = `import {startGateway} from './connect.mjs'; import http from 'node:http';
+    const gateway=await startGateway('https://example.com');
+    http.get({hostname:'127.0.0.1',port:gateway.server.address().port,path:'http://['}, response=>{
+      console.log(response.statusCode);response.resume();response.on('end',()=>{gateway.server.closeAllConnections();gateway.server.close();});
+    }).on('error',()=>{process.exitCode=2;gateway.server.close();});`;
+  const child = spawnSync(process.execPath, ['--input-type=module', '-e', script], { encoding: 'utf8', timeout: 5000, windowsHide: true });
+  assert.equal(child.status, 0, child.stderr);
+  assert.equal(child.stdout.trim(), '400');
+});
+
+test('standalone connection check returns a failing exit status when the service is not ready', async t => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'scitag-diagnostic-'));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  for (const name of ['connect.mjs', 'worker.mjs', 'worker-executors.mjs']) fs.copyFileSync(new URL(name, import.meta.url), path.join(directory, name));
+  const server = http.createServer((req, res) => { res.setHeader('content-type', 'application/json'); res.end('{"ready":false}'); });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => { server.closeAllConnections(); server.close(); });
+  fs.writeFileSync(path.join(directory, 'connection.json'), JSON.stringify({ server: `http://127.0.0.1:${server.address().port}` }));
+  await assert.rejects(promisify(execFile)(process.execPath, [path.join(directory, 'connect.mjs'), '--check'], { timeout: 10000, windowsHide: true }), error => error.code === 1 && error.stdout.includes('尚未就绪'));
+});
+
+test('oversized local requests are rejected before reaching the remote gateway', async t => {
+  let calls = 0;
+  const gateway = await startGateway('https://example.com', { fetcher: async () => { calls++; return Response.json({}); } });
+  t.after(() => { gateway.server.closeAllConnections(); gateway.server.close(); });
+  const response = await fetch(gateway.url + '/api/register', { method: 'POST', headers: { 'content-type': 'application/json' }, body: 'x'.repeat(256001) });
+  assert.equal(response.status, 413);
+  assert.equal(calls, 0);
 });

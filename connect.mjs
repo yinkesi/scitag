@@ -23,10 +23,11 @@ export async function startGateway(server, { fetcher = fetch } = {}) {
   connectionURL(server, '/');
   const gateway = http.createServer(async (req, res) => {
     const origin = `http://127.0.0.1:${gateway.address().port}`;
-    const fail = (status, error) => { res.writeHead(status, { 'content-type': 'application/json; charset=utf-8' }); res.end(JSON.stringify({ error })); };
+    const fail = (status, error) => { if (res.destroyed || res.writableEnded) return; res.writeHead(status, { 'content-type': 'application/json; charset=utf-8' }); res.end(JSON.stringify({ error })); };
     if (req.headers.host !== new URL(origin).host || (req.headers.origin && req.headers.origin !== origin) || req.headers['sec-fetch-site'] === 'cross-site') return fail(403, '仅允许本机协作网页访问');
     if (!['GET', 'POST'].includes(req.method)) return fail(405, '不支持的操作');
-    const url = new URL(req.url, origin);
+    let url;
+    try { url = new URL(req.url, origin); } catch { return fail(400, '请求地址无效'); }
     if (url.origin !== origin || (!url.pathname.startsWith('/api/') && !Object.hasOwn(types, url.pathname))) return fail(404, '入口不存在');
     try {
       const chunks = []; let size = 0;
@@ -74,11 +75,13 @@ export async function diagnose(connection, log = console.log) {
     }
   }
   const directory = fs.mkdtempSync(path.join(root, '.preflight-'));
+  let localOk = false;
   try {
     const result = await executeLocal({ executor: 'command', workspace: directory, command: [process.execPath, '-e', 'process.stdin.resume();process.stdin.on("end",()=>console.log("ok"))'], timeoutMs: 5000 }, { id: 'check', prompt: '' }, directory);
+    localOk = !result.failed;
     log(result.failed ? result.text : '本机子进程与管道：可用');
   } finally { fs.rmSync(directory, { recursive: true, force: true }); }
-  return ok;
+  return ok && localOk;
 }
 
 async function main() {
@@ -90,7 +93,7 @@ async function main() {
   const input = createInterface({ input: process.stdin, output: process.stdout });
   try {
     if (!selection) selection = (await input.question('SciTag 接入\n1 打开协作网页\n2 启动 Codex\n3 启动 Claude Code\n4 启动 DeepSeek\n5 网络与本机检查\n请选择：')).trim();
-    if (selection === '5') { await diagnose(connection); return; }
+    if (selection === '5') { if (!await diagnose(connection)) process.exitCode = 1; return; }
     if (selection === '1') {
       const gateway = await startGateway(connection.server);
       console.log(`请在浏览器打开：${gateway.url}\n使用“登录凭据.txt”登录。保留此窗口；Ctrl+C 关闭。`);
