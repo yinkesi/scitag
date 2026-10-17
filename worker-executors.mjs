@@ -32,9 +32,20 @@ export function executorCommand(config, output) {
       '--skip-git-repo-check', '--cd', config.workspace, '--output-last-message', output,
       ...(config.model ? ['--model', config.model] : []), '-'];
   }
-  if (config.executor === 'claude') return [...launcher('claude'), '-p', '--output-format', 'text',
-    ...(config.model ? ['--model', config.model] : [])];
-  if (config.executor === 'deepseek') return [...launcher('dsh'), '--profile', config.profile || 'headless', '-'];
+  if (config.executor === 'claude') {
+    const readOnly = !config.sandbox || config.sandbox === 'read-only';
+    if (!readOnly && config.sandbox !== 'workspace-write') throw new Error('Claude sandbox 仅支持 read-only 或 workspace-write');
+    if (!readOnly && config.trustLocalPermissions !== true) throw new Error('Claude 写入模式需电脑主人设置 trustLocalPermissions: true，确认信任服务器派发的任务');
+    return [...launcher('claude'), '-p', '--output-format', 'text', '--disable-slash-commands',
+      '--strict-mcp-config', '--mcp-config', '{"mcpServers":{}}', '--settings', '{"disableAllHooks":true}',
+      ...(readOnly ? ['--tools', 'Read,Glob,Grep'] : []), ...(config.model ? ['--model', config.model] : [])];
+  }
+  if (config.executor === 'deepseek') {
+    // The headless CLI has no portable sandbox flag. Do not silently promise
+    // that config.sandbox constrains a user-supplied DSH plugin composition.
+    if (config.trustLocalPermissions !== true) throw new Error('DeepSeek 沿用本机 profile 权限；请在本机隔离环境配置权限，并设置 trustLocalPermissions: true 后启动');
+    return [...launcher('dsh'), '--profile', config.profile || 'headless', '-'];
+  }
   throw new Error('executor 必须是 codex、claude、deepseek 或配置本地 command');
 }
 
@@ -82,7 +93,9 @@ export async function executeLocal(config, job, stateDirectory, signal) {
     child.stderr.on('data', data => { stderr = (stderr + data).slice(-4000); persistOutput('stderr', stderrFile, data); });
     child.stdin.on('error', () => {});
     child.stdin.end(job.prompt);
-    child.on('error', error => finish({ failed: true, text: '无法启动本地 Agent：' + error.message }));
+    child.on('error', error => finish({ failed: true, text: ['EPERM', 'EACCES'].includes(error.code)
+      ? '当前运行环境禁止启动子进程或管道。请在系统普通终端运行接入程序，或由电脑主人检查应用权限；无需关闭全局安全设置。'
+      : '无法启动本地 Agent：' + error.message }));
     child.on('close', code => {
       if (cancelled) return finish({ failed: true, text: '本地执行被中止（超时、退出或租约丢失），请主人核验已有副作用。' });
       if (code !== 0) return finish({ failed: true, text: `Agent 退出码 ${code}。\n${stderr || stdout}`.slice(0, 20000) });

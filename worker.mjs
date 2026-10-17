@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { executeLocal } from './worker-executors.mjs';
+import { executeLocal, executorCommand } from './worker-executors.mjs';
 import http from 'node:http';
 
 /** Honor the computer owner's existing proxy configuration without changing it.
@@ -37,6 +37,14 @@ export async function runWorker(config, { once = false, signal, execute = execut
   const identity = crypto.createHash('sha256').update(server.origin + config.token).digest('hex').slice(0, 20);
   const directory = path.resolve(config.stateDirectory || path.join(os.homedir(), '.scitag', 'workers', identity));
   fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
+  // Fail locally before taking a task if the host blocks piped subprocesses.
+  if (execute === executeLocal) {
+    executorCommand(config, path.join(directory, 'preflight.answer.md'));
+    const probe = await executeLocal({ workspace: config.workspace, executor: 'command',
+      command: [process.execPath, '-e', 'process.stdin.resume();process.stdin.on("end",()=>console.log("SCITAG-PREFLIGHT"))'], timeoutMs: 5000 },
+    { id: 'preflight', prompt: '' }, directory, signal);
+    if (probe.failed) throw new Error('本机启动检查失败，尚未领取远程任务。' + probe.text);
+  }
   const lock = path.join(directory, 'worker.lock');
   if (fs.existsSync(lock)) {
     const pid = Number(fs.readFileSync(lock, 'utf8'));
@@ -49,7 +57,7 @@ export async function runWorker(config, { once = false, signal, execute = execut
   const pendingFile = path.join(directory, 'pending.json');
   const workerId = config.workerId || os.hostname().replace(/[^\w.-]/g, '_').slice(0, 50) + '-' + identity;
   async function api(endpoint, body) {
-    const response = await fetch(new URL(endpoint, server.origin), { method: 'POST', redirect: 'error',
+    const response = await fetch(server.origin + server.pathname.replace(/\/$/, '') + endpoint, { method: 'POST', redirect: 'error',
       headers: { 'content-type': 'application/json', authorization: 'Bearer ' + config.token },
       body: JSON.stringify(body), signal: AbortSignal.timeout(20000) });
     const data = await response.json().catch(() => ({}));
@@ -57,7 +65,15 @@ export async function runWorker(config, { once = false, signal, execute = execut
     return data;
   }
   async function submit(pending) {
-    await api(`/api/worker/jobs/${pending.job.id}/complete`, { leaseToken: pending.job.leaseToken, ...pending.result });
+    try {
+      await api(`/api/worker/jobs/${pending.job.id}/complete`, { leaseToken: pending.job.leaseToken, ...pending.result });
+    } catch (error) {
+      if (![404, 409].includes(error.status)) throw error;
+      writeJson(path.join(directory, pending.job.id + '.stale.json'), pending);
+      fs.unlinkSync(pendingFile);
+      log('[worker] 旧租约已失效，结果保留在本机');
+      return;
+    }
     writeJson(path.join(directory, pending.job.id + '.json'), pending);
     fs.unlinkSync(pendingFile);
     log(`[worker] 已回传 ${pending.job.id}`);
@@ -72,31 +88,34 @@ export async function runWorker(config, { once = false, signal, execute = execut
             pending.result = { failed: true, text: '本地程序在执行过程中中断，未自动重复执行。请主人检查本地成果后重新派发。' };
             writeJson(pendingFile, pending);
           }
-          try { await submit(pending); }
-          catch (error) {
-            if (![404, 409].includes(error.status)) throw error;
-            writeJson(path.join(directory, pending.job.id + '.stale.json'), pending);
-            fs.unlinkSync(pendingFile);
-            log('[worker] 旧租约已失效，结果保留在本机');
-          }
+          await submit(pending);
+          if (once) break;
         }
         if (signal?.aborted) break;
         const { job } = await api('/api/worker/jobs/claim', { workerId });
         if (!job) { if (once) break; await sleep(config.pollMs || 5000); continue; }
-        if (!/^r_[a-f0-9]{24}$/.test(job.id) || typeof job.prompt !== 'string' || typeof job.leaseToken !== 'string') throw new Error('服务器作业格式无效');
+        if (!/^r_[a-f0-9]{24}$/.test(job.id) || typeof job.prompt !== 'string' || job.prompt.length > 256000 ||
+          typeof job.leaseToken !== 'string' || !job.leaseToken || !Number.isSafeInteger(job.leaseMs) || job.leaseMs < 60000 || job.leaseMs > 600000) {
+          throw Object.assign(new Error('服务器作业格式或租约时长无效，未执行本机工具'), { status: 400 });
+        }
         const pending = { job, result: null };
         writeJson(pendingFile, pending);
         log(`[worker] 开始 ${job.kind} ${job.id}`);
         const controller = new AbortController();
         const stop = () => controller.abort();
         signal?.addEventListener('abort', stop, { once: true });
-        let leaseOk = Date.now(), renewing = false;
+        if (signal?.aborted) stop();
+        let leaseOk = Date.now(), renewing = false, finished = false;
+        let deadline = setTimeout(stop, job.leaseMs - 25000);
         const heartbeat = setInterval(async () => {
           if (renewing) return;
           renewing = true;
           try {
             await api(`/api/worker/jobs/${job.id}/heartbeat`, { leaseToken: job.leaseToken });
+            if (controller.signal.aborted || finished) return;
             leaseOk = Date.now();
+            clearTimeout(deadline);
+            deadline = setTimeout(stop, job.leaseMs - 25000);
           } catch (error) {
             if ([401, 403, 404, 409].includes(error.status) || Date.now() - leaseOk > job.leaseMs - 25000) controller.abort();
           } finally { renewing = false; }
@@ -107,7 +126,7 @@ export async function runWorker(config, { once = false, signal, execute = execut
           pending.result = cached?.result || await execute(config, job, directory, controller.signal);
           writeJson(pendingFile, pending);
           await submit(pending);
-        } finally { clearInterval(heartbeat); signal?.removeEventListener('abort', stop); }
+        } finally { finished = true; clearInterval(heartbeat); clearTimeout(deadline); signal?.removeEventListener('abort', stop); }
         if (once) break;
       } catch (error) {
         if ([400, 401, 403].includes(error.status)) throw error;
