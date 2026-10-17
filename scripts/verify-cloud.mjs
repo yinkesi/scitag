@@ -7,6 +7,10 @@ import { fileURLToPath } from 'node:url';
 import { runWorker } from '../worker.mjs';
 import { executeLocal } from '../worker-executors.mjs';
 
+if (process.argv.includes('--models') && !process.argv.includes('--trust-local-permissions')) {
+  throw new Error('真实 DeepSeek 验收会沿用本机 profile 权限。确认隔离与信任后，显式追加 --trust-local-permissions；未创建验收任务。');
+}
+
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const configPath = path.join(root, 'data/cloud-deployment.private.json');
 const cloud = JSON.parse(fs.readFileSync(configPath, 'utf8'));
@@ -93,7 +97,8 @@ check('owner approval publishes the report', (await api(`/api/tasks/${first.id}/
 if (process.argv.includes('--models')) {
   for (const [name, local] of [['codex-cli', codex], ['deepseek-harness', deepseek]]) {
     const live = await task(name, '真实本地 Agent 读取文件并回传');
-    await runWorker({ ...local, timeoutMs: 180000 }, { once: true });
+    await runWorker({ ...local, timeoutMs: 180000,
+      trustLocalPermissions: process.argv.includes('--trust-local-permissions') }, { once: true });
     const report = (await api(`/api/tasks/${live.id}`)).task;
     check(`${local.executor} real Agent completes through cloud`, report.status === 'reported' &&
       report.report?.includes(`SCITAG-CLOUD-VERIFIED-${local.executor.toUpperCase()}`));

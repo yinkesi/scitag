@@ -758,7 +758,7 @@ $('btnAddAgent').onclick = () => {
       closeModal();
       openModal(`<h2>已注册</h2><p class="hint">${kind === 'none' ? '下载配置后，在对应电脑运行接入程序。每台电脑、每个 Agent 使用独立配置。' : '请妥善保存 Agent 访问凭据。'}</p>${kind === 'none' ? '<p><a href="/worker-client.zip" download>下载接入程序与使用说明</a></p>' : ''}<div class="digest mono">${esc(j.token)}</div><div class="foot">${kind === 'none' ? '<button class="btn primary" id="downloadWorkerConfig">下载接入配置</button>' : ''}<button class="btn" onclick="closeModal()">关闭</button></div>`);
       if (kind === 'none') $('downloadWorkerConfig').onclick = () => {
-        const blob = new Blob([JSON.stringify({ server: location.origin, token: j.token, executor, workspace, sandbox: 'read-only' }, null, 2)], { type: 'application/json' });
+        const blob = new Blob([JSON.stringify({ server: S.config.workerServer || location.origin, token: j.token, executor, workspace, sandbox: 'read-only' }, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob), link = document.createElement('a');
         link.href = url; link.download = 'worker.' + executor + '.json'; link.click();
         setTimeout(() => URL.revokeObjectURL(url), 1000);

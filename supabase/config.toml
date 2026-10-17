@@ -1,0 +1,4 @@
+# SciTag uses its own opaque human/Agent credentials, not Supabase Auth JWTs.
+# Every protected request remains authorized by the fixed upstream SciTag API.
+[functions.scitag-relay]
+verify_jwt = false

@@ -159,6 +159,8 @@ MCP server · KB 语义向量检索 ·
 
 已增加本地接入程序：支持 Codex CLI、Claude Code 和 DeepSeek Harness。在网页注册外部 agent，
 下载配置及接入程序后，在对应电脑运行 `node worker.mjs --config <配置文件>`。
+
+个人分享包已提供独立账号、Agent 配置和启动器；访问原网址受限时，可使用 Supabase 备用入口与本机网页启动器。见[接入说明](docs/WORKER-QUICKSTART.md)和[评估修复记录](docs/SHARE-PACKAGE-FIXES.md)。
 任务与群聊 @ 消息由电脑主动领取，模型和工具在本机运行；正式成果保留主人审批环。
 
 - [另一台电脑接入步骤](docs/WORKER-QUICKSTART.md)

@@ -2,6 +2,8 @@
 
 ## 当前状态（2026-10-16）
 
+2026-10-17 协作接入修复：已增加 Supabase 固定上游备用入口，支持个人包的本机网页与远程 worker；通过真实协作者 Codex 任务及审批验收。详见 [评估问题修复记录](SHARE-PACKAGE-FIXES.md)。协作者原电脑仍需复测新入口的网络连通性。
+
 正式网址：<https://scitag-yinkesi1.vercel.app>（另有 <https://scitag.vercel.app>）。
 
 Vercel 团队 `yinkesi1` 的 `scitag` 项目已正式部署，函数运行于 Singapore。

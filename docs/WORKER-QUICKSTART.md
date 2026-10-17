@@ -1,32 +1,51 @@
 # 在另一台电脑连接 Agent
 
+## 已收到修复版个人接入包
+
+将 ZIP **所有文件解压到同一个目录**，直接看到 `启动接入.cmd` 的这一层就是接入目录，配置 `worker.*.json` 已包含，不需要先访问网页下载。
+
+1. 双击 `打开协作网页.cmd`，将窗口显示的本机网址复制到浏览器，用 `登录凭据.txt` 登录。保留此窗口。
+2. 另开 `启动Codex.cmd`、`启动Claude.cmd` 或 `启动DeepSeek.cmd`。启动器询问本机工作目录，回车使用包内 `workspace`，不会使用邀请人的电脑路径。
+3. 本机仍需安装对应 CLI、完成登录，并拥有自己的模型订阅或 API 额度。保持电脑联网与终端运行；Ctrl+C 停止。
+
+网页与 worker 都可通过 Supabase 备用入口连接同一平台，避免直接访问 `*.vercel.app`。备用入口是否可达仍取决于该电脑的网络；连接失败时双击 `检查连接.cmd`，分别检查两条路。
+入口不会修改 DNS、系统代理或全局安全设置，也不提供代理服务。已有代理可由电脑主人在普通 PowerShell 中设置 `$env:HTTPS_PROXY='http://127.0.0.1:实际端口'`，再从该终端运行 `node connect.mjs`。浏览器使用启动器的本机入口时，远程网络请求由 Node 发出；直接打开原网址仍使用浏览器自己的网络设置。
+
+**在操作系统普通终端运行，或双击启动器。** 如果宿主限制子进程或命名管道，会在领取任务前停止并说明；不要因此关闭全局安全机制。
+
+个人包包含明文人类登录凭据与三个 Agent 凭据，只交给对应的一位协作者，不公开、发群或提交 Git。通用网页下载包不含任何人的凭据，需要按下一节自行注册。
+
 ## 准备
 
 安装 Node.js 18 或更新版本，并确认本机已经能使用 Codex CLI、Claude Code 或 DeepSeek Harness。
 需要通过已有 HTTP/HTTPS 代理访问公网的电脑，请使用 Node.js 24.14 或更新版本；接入程序会读取已有的代理环境变量，不修改系统网络设置。
 每个 Agent 在 SciTag 中单独注册，绑定实际审阅成果的研究者。
 
-在网页「接入新 agent」选择对应执行器，填写**运行 Agent 的电脑上的任务文件夹绝对路径**，下载配置。
-下载接入程序并解压，将配置放在自己能访问的目录中。配置含访问凭据，不要发到群聊或提交 Git。
+若使用通用接入包，在网页「接入新 agent」选择对应执行器，填写**运行 Agent 的电脑上的任务文件夹绝对路径**，下载配置。
+下载接入程序并解压，**将下载的配置放到与 `worker.mjs` 同一目录**。配置含访问凭据，不要发到群聊或提交 Git。
 
 ## 启动
 
 在接入程序所在目录运行，按实际下载的文件名选择一条：
 
 ```powershell
-node worker.mjs --config "C:\Users\你的用户名\Downloads\worker.codex.json"
-node worker.mjs --config "C:\Users\你的用户名\Downloads\worker.claude.json"
-node worker.mjs --config "C:\Users\你的用户名\Downloads\worker.deepseek.json"
+node worker.mjs --config worker.codex.json
+node worker.mjs --config worker.claude.json
+node worker.mjs --config worker.deepseek.json
 ```
 
 Linux/macOS 同样运行 `node worker.mjs --config /绝对路径/worker.codex.json`。
 电脑需要保持开机、联网，终端保持运行；按 Ctrl+C 停止。
 
+只检查一次任务领取与处理可追加 `--once`：`node worker.mjs --config worker.codex.json --once`。没有任务立即退出；有任务执行并回传后退出。仅测试网络、不领取任务可运行个人包的 `node connect.mjs --check`。
+
 - Codex 默认只读，沿用本机登录；需要写入工作目录时，由电脑主人将配置中的 `sandbox` 改为 `workspace-write`。
-- Claude Code 沿用自己的权限控制，接入程序不会关闭审批或绕过权限；需要交互审批的操作可能失败并转人工。
-- DeepSeek Harness 使用本机 `headless` profile，沿用该 profile 的模型、登录与工具权限。
+- Claude Code 默认仅开放 `Read,Glob,Grep`，禁止 MCP、技能与钩子；这是工具限制，不是跨平台操作系统沙箱。需要写入时，由电脑主人设置 `sandbox: "workspace-write"` 与 `trustLocalPermissions: true`，之后沿用本机审批权限，不绕过审批。模型实跑尚未验收通过。
+- DeepSeek Harness 使用本机 `headless` profile。其 CLI 没有统一 `--sandbox` 参数，配置的 `sandbox` 不会自动限制任意 profile 插件。电脑主人需要在自己的 profile 中设置隔离/审批，确认后设置 `trustLocalPermissions: true`，个人包启动器会解释并询问。不会自动修改全局 profile。
 - 三个执行器均通过标准输入接收任务，不把服务器任务拼接成 shell 命令。
 - 文件夹中的文件只在本机可见。要让另一电脑使用文件，应通过双方同意的共享存储或 Git 交接；首版自动回传报告正文，不自动上传任意文件。
+
+服务器任务正文交给本机 Agent，因此必须信任邀请方、部署与本机工具。如果服务器或账号被控制，攻击者可尝试让 Agent 使用已授予的工具权限。只读模式也可能读取该 Agent 能访问的文件；请使用独立工作目录/账号或虚拟机，不要将主力目录、凭据或高权限工具交给不信任的任务源。不能将 `cwd` 当成文件隔离边界。
 
 ## 重启与失败
 

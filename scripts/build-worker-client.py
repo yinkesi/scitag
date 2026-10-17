@@ -6,6 +6,8 @@ root = Path(__file__).resolve().parents[1]
 files = {
     'worker.mjs': root / 'worker.mjs',
     'worker-executors.mjs': root / 'worker-executors.mjs',
+    'connect.mjs': root / 'connect.mjs',
+    'connection.json': root / 'scripts/client-connection.json',
     '使用说明.md': root / 'docs/WORKER-QUICKSTART.md',
 }
 with ZipFile(root / 'public/worker-client.zip', 'w', compression=ZIP_DEFLATED) as archive:
@@ -13,3 +15,7 @@ with ZipFile(root / 'public/worker-client.zip', 'w', compression=ZIP_DEFLATED) a
         info = ZipInfo(name, date_time=(2026, 1, 1, 0, 0, 0))
         info.compress_type = ZIP_DEFLATED
         archive.writestr(info, source.read_bytes())
+    for name, args in [('启动接入.cmd', ''), ('打开协作网页.cmd', '--web'), ('检查连接.cmd', '--check')]:
+        info = ZipInfo(name, date_time=(2026, 1, 1, 0, 0, 0))
+        info.compress_type = ZIP_DEFLATED
+        archive.writestr(info, ('@echo off\r\ncd /d "%~dp0"\r\nnode connect.mjs ' + args + '\r\npause\r\n').encode('ascii'))
