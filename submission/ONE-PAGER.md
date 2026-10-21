@@ -1,4 +1,4 @@
-# Auditable concept screening for bioresorbable vascular devices
+﻿# Auditable concept screening for bioresorbable vascular devices
 ### A domain-tuned 4B model inside SciTag's human-gated multi-agent harness — Adaption sponsor track
 
 **TL;DR** — We turned a 1,392-row clinical-engineering dataset into a resident 4B domain model via Adaption's Adaptive Data + AutoScientist, then plugged it into SciTag as an OpenAI-compatible agent that calls a real analysis tool before answering. Same data, stronger LoRA: the platform's held-out preference win rate went from **51.67% → 90.67%**. Every answer carries tool provenance (domain, command, exit code, SHA-256 data hashes), so a human owner can audit the number, not just the prose.
@@ -27,7 +27,7 @@ Two hard constraints: (1) numbers must come from physics/tooling, not language-m
 | v2 | 1,271 rows + reasoning traces | r=16, 1 epoch | 40.43% (negative — reasoning style hurt the judge) |
 | **v1-strong** | same 1,392 rows | **r=32, 3 epochs, lr 1e-4** | **90.67%** (target 0.65 exceeded) |
 
-Key finding: **dataset style was not the bottleneck — training strength was.** With identical data, moving from 1 epoch/r16 to 3 epochs/r32 lifted the win rate by ~39 points. The v2 "reasoning-trace" corpus is kept as a documented negative result.
+Local held-out check (12 prompts, greedy, 4-bit): numeric recall 27.8% → **33.6%**, keyword/required-phrase hit 22.5% → **38.6%** (base → v1-strong).\n\nKey finding: **dataset style was not the bottleneck — training strength was.** With identical data, moving from 1 epoch/r16 to 3 epochs/r32 lifted the win rate by ~39 points. The v2 "reasoning-trace" corpus is kept as a documented negative result.
 
 ## 4. Deployment & auditable demo
 
@@ -57,3 +57,4 @@ Key finding: **dataset style was not the bottleneck — training strength was.**
 ## 7. Why this fits the sponsor track
 
 Adaption supplied the full loop — data adaptation, automated LoRA search, downloadable weights — and the result is measurable (51.67% → 90.67%) and deployable locally (no API dependency, 3.2 GB VRAM). SciTag supplies the missing half for science: domain tools, human gating, and provenance. Together they produce a **small, auditable, offline domain model** that a research group can run on a laptop.
+
