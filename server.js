@@ -25,6 +25,7 @@ import { fileURLToPath } from 'node:url';
 import * as routing from './routing.js';
 import * as workflow from './workflow.js';
 import { getAdapter, listBackends, buildPrompt } from './adapters.mjs';
+import { parseAnalysisSpec, summarizeAnalysis } from './analysis-spec.mjs';
 import { makeEngine } from './engine.mjs';
 import { createStore } from './persistence.mjs';
 import { makeRemoteJobs } from './remote-jobs.mjs';
@@ -200,6 +201,11 @@ function scanDomains() {
       const skills = scanDomainSkills(e.name);
       let kbCount = 0;
       try { kbCount = fs.readdirSync(path.join(dir, 'kb')).filter((f) => f.toLowerCase().endsWith('.md')).length; } catch {}
+      let analysis = null;
+      try { analysis = summarizeAnalysis(parseAnalysisSpec(meta)); } catch (error) {
+        // 域包声明写错不应拖垮整个平台：把错误暴露到资源层，其余资源照常可用。
+        analysis = { error: error.message };
+      }
       items.push({
         name: String(meta.name || e.name),
         version: String(meta.version || '0.0.0'),
@@ -209,6 +215,7 @@ function scanDomains() {
         dir,
         skills: skills.map(({ name, description, triggers }) => ({ name, description, triggers })),
         kbCount,
+        analysis,
       });
     }
   } catch {}
@@ -1096,7 +1103,7 @@ async function route(req, res) {
         agents: Object.values(db.agents).map(pubAgent),
         channels: listChannelsFor(me.name),
         missions: Object.values(db.missions).filter(m => canReadMission(me.name, m)).map(m => pubMission(m, me.name)),
-        domains: scanDomains().map(({ name, version, description, skills, kbCount }) => ({ name, version, description, skills, kbCount })),
+        domains: scanDomains().map(({ name, version, description, skills, kbCount, analysis }) => ({ name, version, description, skills, kbCount, analysis })),
         backends: CLOUD ? [{ id: 'none', label: '本地 Agent（主动连接）' }] : listBackends(),
         seq: db.seq,
       });
@@ -1104,7 +1111,7 @@ async function route(req, res) {
 
     /* ---- 域包资源（公开只读） ---- */
     if (p === '/api/domains' && method === 'GET') {
-      return json(res, 200, { domains: scanDomains().map(({ name, version, description, data, skills, kbCount, dir }) => ({ name, version, description, data, skills, kbCount, dir })) });
+      return json(res, 200, { domains: scanDomains().map(({ name, version, description, data, skills, kbCount, dir, analysis }) => ({ name, version, description, data, skills, kbCount, dir, analysis })) });
     }
     let mDom = p.match(/^\/api\/domains\/([^/]+)\/kb$/);
     if (mDom && method === 'GET') {

@@ -1,0 +1,89 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+  @page { size: A4; margin: 14mm 14mm 12mm 14mm; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; color:#1d232b; font-size: 9.6pt; line-height:1.42; }
+  h1 { font-size: 19pt; margin: 0 0 2mm 0; color:#14324f; }
+  h2 { font-size: 13pt; margin: 5mm 0 1.5mm 0; color:#14324f; border-bottom:1px solid #d8e0e8; padding-bottom:1mm; }
+  h3 { font-size: 10pt; margin: 0 0 3mm 0; color:#3a5a78; font-weight:600; }
+  table { border-collapse: collapse; width: 100%; margin: 2mm 0; font-size: 8.8pt; }
+  th, td { border: 1px solid #c9d3dd; padding: 1.4mm 2mm; text-align: left; vertical-align: top; }
+  th { background: #eef3f8; }
+  blockquote { margin: 2mm 0; padding: 2mm 3mm; border-left: 3px solid #2f6f4f; background:#f4f8f5; }
+  code { background:#eef1f4; padding: 0.3mm 1mm; border-radius: 2px; font-size: 8.6pt; }
+  hr { border: none; border-top:1px solid #d8e0e8; margin: 3mm 0; }
+  img { max-width: 100%; }
+  p { margin: 1.2mm 0; }
+</style></head><body>
+<h1>Auditable concept screening for bioresorbable vascular devices</h1>
+<h3>A domain-tuned 4B model inside SciTag's human-gated multi-agent harness — Adaption sponsor track</h3>
+<p><strong>TL;DR</strong> — We turned a 1,392-row clinical-engineering dataset into a resident 4B domain model via Adaption's Adaptive Data + AutoScientist, then plugged it into SciTag as an OpenAI-compatible agent that calls a real analysis tool before answering. Same data, stronger LoRA: the platform's held-out preference win rate went from <strong>51.67% → 90.67%</strong>. Every answer carries tool provenance (domain, command, exit code, SHA-256 data hashes), so a human owner can audit the number, not just the prose.</p>
+<hr />
+<h2>1. Problem</h2>
+<p>Bioresorbable vascular intervention forces a concept decision before any design work: a <strong>drug-eluting stent</strong> (local drug, preserve flow) versus an <strong>occluder / plug</strong> (permanent occlusion, e.g. tumor-feeding artery embolization). Clinicians input a case (lesion size, target vessel, lesion length, blood pressure, intent); the system must return a <em>quantified</em> concept screen and a material shortlist — not a generic LLM opinion.</p>
+<p>Two hard constraints: (1) numbers must come from physics/tooling, not language-model memory; (2) a human must be able to audit the recommendation.</p>
+<h2>2. System: SciTag + Adaption</h2>
+<p><strong>SciTag</strong> (zero-dependency Node ≥18) is a research-collaboration harness: a PI dispatches work, agents mount domain packages (knowledge base, skills, data, declared analysis tools), report to their human owner for approval, and only then publish. The platform records tool runs and provenance for every agent answer.</p>
+<p><strong>Domain package <code>vascular-stent</code></strong> exposes a zero-dependency Python tool (<code>stent_tool.py</code>) declared in <code>domain.json</code>: material comparison, thin-ring stiffness, Poiseuille baseline, numerical self-checks, and a <strong><code>concept</code></strong> command that computes: drug-payload budget vs oral dose, static pressure load and required sealing force for a defect, and material shortlists with degradation-class screening.</p>
+<p><strong>Adaption pipeline</strong> — <code>1,392</code> instruction rows (materials facts, drug budgets, seal loads, case→concept, tool usage, refusal/red-line cases) → Adaptive Data → AutoScientist (Qwen3.5-4B, LoRA). A held-out 144-row split is never trained on.</p>
+<h2>3. Results</h2>
+<table>
+<thead>
+<tr>
+<th>Run</th>
+<th>Data</th>
+<th>LoRA / schedule</th>
+<th>Platform win rate</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>v1</td>
+<td>1,392 rows</td>
+<td>r=16, 1 epoch, lr 5e-5 (platform default)</td>
+<td><strong>51.67%</strong> (≈ tie with base)</td>
+</tr>
+<tr>
+<td>v2</td>
+<td>1,271 rows + reasoning traces</td>
+<td>r=16, 1 epoch</td>
+<td>40.43% (negative — reasoning style hurt the judge)</td>
+</tr>
+<tr>
+<td><strong>v1-strong</strong></td>
+<td>same 1,392 rows</td>
+<td><strong>r=32, 3 epochs, lr 1e-4</strong></td>
+<td><strong>90.67%</strong> (target 0.65 exceeded)</td>
+</tr>
+</tbody>
+</table>
+<p>Key finding: <strong>dataset style was not the bottleneck — training strength was.</strong> With identical data, moving from 1 epoch/r16 to 3 epochs/r32 lifted the win rate by ~39 points. The v2 "reasoning-trace" corpus is kept as a documented negative result.</p>
+<h2>4. Deployment &amp; auditable demo</h2>
+<ul>
+<li>LoRA merged into base weights (manual key remap; PEFT injection silently failed under transformers 5.8), served as an <strong>OpenAI-compatible</strong> endpoint (<code>/v1/chat/completions</code>), 4-bit NF4, ~3.2 GB VRAM, ~5 tokens/s on an RTX 5060 Laptop.</li>
+<li>SciTag agent <code>支架适配模型</code> mounts <code>vascular-stent</code> and uses a <strong>forced pre-flight tool call</strong>: the case parameters are parsed, <code>concept</code> is executed, and the real JSON is placed in a lean context before generation (also avoids 8 GB VRAM OOM on long contexts).</li>
+<li>Example case (hepatic artery, 4.0 mm lesion, 3.0 mm vessel, 100 mmHg, permanent embolization):</li>
+</ul>
+<blockquote>
+<p>A (drug-eluting) <strong>not viable</strong>: local payload ~270 µg ≈ 1.39×10⁻⁵ of a 20 mg/day oral dose — 3+ orders of magnitude short.
+B (occlusion) <strong>viable</strong>: static load 167 mN → required sealing force <strong>0.335 N</strong> at safety factor 2. Fe / Zn / Mg frames pass the 1.5× margin screen for permanent occlusion.
+Audit record: <code>domain=vascular-stent</code>, <code>command=concept</code>, <code>exitCode=0</code>, <code>analysisRuns=1</code>, data/script SHA-256 in provenance.</p>
+</blockquote>
+<h2>5. Reproducibility</h2>
+<ul>
+<li>Dataset generator + held-out split: <code>_adaption/dataset/build_dataset.py</code> (seed 20261020), dataset card included.</li>
+<li>Training: <code>upload_and_train*.py</code> (Adaption SDK 0.15.0); run IDs and win rates logged in <code>train-state*.json</code>.</li>
+<li>Serving: <code>serve_adapted.py</code> (tools + <code>&lt;tool_call&gt;</code> parsing); merging: <code>merge_lora_stream.py</code>.</li>
+<li>Harness: <code>scitag</code> repo with new tests <code>test-llm-tools.mjs</code> (10 tests covering pre-flight, lean tool round, rejection paths) and full <code>npm test</code> green (119 regression + suites).</li>
+<li>Repo: <code>https://github.com/yinkesi/scitag</code> · Video: <code>&lt;link&gt;</code> · Dataset: see <code>submission/</code> and notes.</li>
+</ul>
+<h2>6. Limitations &amp; safety</h2>
+<ul>
+<li>The tuned model is a <strong>domain assistant</strong>, not a clinician: no diagnosis, no device sizing decisions; owner approval is mandatory.</li>
+<li>Training data is synthetic/templated from domain KB + published material properties (MatWeb, internal use only — raw CSVs are <strong>not</strong> redistributed).</li>
+<li>Material library lacks corrosion kinetics/fatigue data; all shortlists are order-of-magnitude screens requiring bench/animal validation.</li>
+<li>4B model still occasionally adds out-of-library materials; core numbers are tool-derived and auditable.</li>
+</ul>
+<h2>7. Why this fits the sponsor track</h2>
+<p>Adaption supplied the full loop — data adaptation, automated LoRA search, downloadable weights — and the result is measurable (51.67% → 90.67%) and deployable locally (no API dependency, 3.2 GB VRAM). SciTag supplies the missing half for science: domain tools, human gating, and provenance. Together they produce a <strong>small, auditable, offline domain model</strong> that a research group can run on a laptop.</p>
+</body></html>

@@ -11,7 +11,7 @@
     "test:remote": "node --test test-remote-jobs.mjs test-cloud-store.mjs test-worker.mjs test-remote.mjs",
     "test": "node test-all.mjs",
     "test:core": "node test-smoke.mjs && node test-edge.mjs && node --test test-persistence.mjs",
-    "test:research": "node --test test-research.mjs test-llm-tools.mjs",
+    "test:research": "node --test test-research.mjs test-llm-tools.mjs test-vascular-stent.mjs",
     "test:regression": "node test-regression.mjs"
   },
   "license": "MIT"

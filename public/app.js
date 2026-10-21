@@ -697,15 +697,16 @@ $('btnAddAgent').onclick = () => {
     <label for="agWorkspace">这台电脑的任务文件夹</label><input id="agWorkspace" placeholder="例如 D:\\research\\scitag-work 或 /home/me/research">
     <p class="hint">注册后下载接入配置，在运行该 Agent 的电脑启动接入程序。模型和工具在那台电脑执行。</p></div>
     <div id="agAnalysisFields" class="hidden">
-      <label for="agCommand">分析步骤</label><select id="agCommand"><option value="stats">数据统计</option><option value="fit">函数拟合</option><option value="inverse">逆设计</option></select>
-      <div id="agTargetRow" class="hidden"><label for="agTarget">compliance 目标上限</label><input id="agTarget" type="number" step="any" min="0" value="8e-11"></div>
-      <p class="hint">对挂载的骨支架数据实际计算，报告先交给主人审阅。</p>
+      <label for="agAnalysisDomain">分析域包</label><select id="agAnalysisDomain"></select>
+      <label for="agCommand">分析步骤</label><select id="agCommand"></select>
+      <div id="agParams"></div>
+      <p class="hint">只对已挂载、且在 domain.json 里声明了 analysis 的域包实际计算；报告先交给主人审阅。</p>
     </div>
     <div id="agLlmFields" class="hidden">
       <label for="agBaseUrl">模型接口地址</label><input id="agBaseUrl" type="url" placeholder="https://你的服务地址/v1">
       <label for="agModel">模型名称</label><input id="agModel" placeholder="服务支持的模型名称">
       <label for="agApiKey">访问密钥（可选）</label><input id="agApiKey" type="password" autocomplete="new-password">
-      <label><input id="agTools" type="checkbox" checked> 允许模型调用骨支架分析工具</label>
+      <label><input id="agTools" type="checkbox" checked> 允许模型调用已挂载域包的分析工具</label>
     </div>
     <div id="agWebhookFields" class="hidden"><label for="agWebhookUrl">Agent 接入地址</label><input id="agWebhookUrl" type="url" placeholder="https://你的 agent 服务地址"></div>
     <div class="foot"><button class="btn" onclick="closeModal()">取消</button><button class="btn primary" id="agGo">注册</button></div>`);
@@ -721,12 +722,65 @@ $('btnAddAgent').onclick = () => {
   };
   $('agDomains').querySelectorAll('.chip').forEach((ch) => ch.onclick = () => ch.classList.toggle('on'));
   $('agDomains').querySelectorAll('.chip')[0]?.classList.add('on');
+  const analysisDomainMeta = () => S.domains.find((d) => d.name === $('agAnalysisDomain').value);
+  const renderAnalysisParams = () => {
+    const meta = analysisDomainMeta();
+    const command = (meta?.analysis?.commands || []).find((c) => c.name === $('agCommand').value);
+    const box = $('agParams');
+    box.innerHTML = '';
+    for (const p of command?.params || []) {
+      const label = document.createElement('label');
+      label.htmlFor = 'agParam_' + p.name;
+      label.textContent = `${p.label || p.name}${p.required ? '' : '（可选）'}`;
+      let input;
+      if (p.type === 'boolean') {
+        input = document.createElement('input'); input.type = 'checkbox';
+        input.checked = p.default === true;
+      } else if (p.enum?.length) {
+        input = document.createElement('select');
+        input.innerHTML = '<option value="">（默认）</option>' + p.enum.map((v) => `<option value="${esc(v)}">${esc(v)}</option>`).join('');
+      } else if (p.type === 'number') {
+        input = document.createElement('input'); input.type = 'number'; input.step = 'any';
+        if (p.positive) input.min = '0';
+        if (p.default !== undefined) input.value = String(p.default);
+      } else {
+        input = document.createElement('input'); input.type = 'text';
+        if (p.default !== undefined) input.value = String(p.default);
+      }
+      input.id = 'agParam_' + p.name;
+      input.dataset.param = p.name;
+      input.dataset.type = p.type;
+      if (p.description) input.title = p.description;
+      if (p.required && input.type !== 'checkbox') input.required = true;
+      box.append(label, input);
+    }
+  };
+  const renderAnalysisCommands = () => {
+    const meta = analysisDomainMeta();
+    const commands = meta?.analysis?.commands || [];
+    const sel = $('agCommand');
+    const current = sel.value;
+    sel.innerHTML = commands.map((c) => `<option value="${esc(c.name)}">${esc(c.label || c.name)}</option>`).join('');
+    if (commands.some((c) => c.name === current)) sel.value = current;
+    renderAnalysisParams();
+  };
+  const renderAnalysis = () => {
+    const holders = S.domains.filter((d) => d.analysis && !d.analysis.error);
+    const sel = $('agAnalysisDomain');
+    const current = sel.value;
+    sel.innerHTML = holders.map((d) => `<option value="${esc(d.name)}">${esc(d.name)}</option>`).join('');
+    if (holders.some((d) => d.name === current)) sel.value = current;
+    renderAnalysisCommands();
+  };
+  renderAnalysis();
+  $('agAnalysisDomain').onchange = renderAnalysisCommands;
+  $('agCommand').onchange = renderAnalysisParams;
   $('agAdapter').onchange = () => {
     for (const [id, kind] of [['agAnalysisFields', 'analysis'], ['agLlmFields', 'llm'], ['agWebhookFields', 'webhook'], ['agLocalFields', 'none']]) {
       $(id).classList.toggle('hidden', $('agAdapter').value !== kind);
     }
+    if ($('agAdapter').value === 'analysis') renderAnalysis();
   };
-  $('agCommand').onchange = () => $('agTargetRow').classList.toggle('hidden', $('agCommand').value !== 'inverse');
   $('agGo').onclick = async () => {
     const domains = [...$('agDomains').querySelectorAll('.chip.on')].map((c) => c.dataset.d);
     try {
@@ -736,12 +790,29 @@ $('btnAddAgent').onclick = () => {
       if (kind === 'none' && !workspace) throw new Error('请填写运行 Agent 的电脑上的任务文件夹');
       let options = {};
       if (kind === 'analysis') {
-        if (!domains.includes('bone-scaffold')) throw new Error('科研分析需要挂载 bone-scaffold 域包');
-        options = { domain: 'bone-scaffold', command: $('agCommand').value };
-        if (options.command === 'inverse') {
-          options.target = Number($('agTarget').value);
-          if (!Number.isFinite(options.target) || options.target <= 0) throw new Error('目标上限须为正数');
+        const meta = analysisDomainMeta();
+        if (!meta?.analysis?.commands?.length) throw new Error('没有可用分析域包：请先挂载声明了 analysis 的域包');
+        if (!domains.includes(meta.name)) throw new Error(`科研分析需要挂载 ${meta.name} 域包`);
+        const commandMeta = meta.analysis.commands.find((c) => c.name === $('agCommand').value);
+        if (!commandMeta) throw new Error('请选择分析步骤');
+        const params = {};
+        for (const p of commandMeta.params || []) {
+          const el = $('agParam_' + p.name);
+          if (!el) continue;
+          if (p.type === 'boolean') { if (el.checked) params[p.name] = true; continue; }
+          const raw = String(el.value ?? '').trim();
+          if (!raw) { if (p.required) throw new Error(`请填写${p.label || p.name}`); continue; }
+          if (p.type === 'number') {
+            const value = Number(raw);
+            if (!Number.isFinite(value)) throw new Error(`${p.label || p.name} 须为数值`);
+            if (p.positive && value <= 0) throw new Error(`${p.label || p.name} 须为正数`);
+            params[p.name] = value;
+          } else {
+            if (p.enum?.length && !p.enum.includes(raw)) throw new Error(`${p.label || p.name} 取值无效`);
+            params[p.name] = raw;
+          }
         }
+        options = { domain: meta.name, command: commandMeta.name, params };
       } else if (kind === 'llm') {
         options = { baseUrl: $('agBaseUrl').value.trim(), model: $('agModel').value.trim(), apiKey: $('agApiKey').value.trim(), enableTools: $('agTools').checked };
         if (!options.baseUrl || !options.model) throw new Error('请填写模型接口地址和名称');

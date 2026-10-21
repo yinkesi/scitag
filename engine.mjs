@@ -84,6 +84,9 @@ export function makeEngine(deps) {
         if (res.ok) deps.onTaskReport(job.taskId, res.text, { provenance: res.provenance, analysisRuns: res.analysisRuns });
         else deps.onTaskFail(job.taskId, String(res.text || '执行失败'), { provenance: res.provenance, analysisRuns: res.analysisRuns });
       } else if (res.ok) {
+      // 留下可审计痕迹：群聊回复同样记录工具运行与 provenance
+      job.analysisRuns = res.analysisRuns || [];
+      job.provenance = res.provenance || null;
       const { cleanText, directives } = parseDirectives(res.text);
       if (cleanText) deps.onChatReply(job, cleanText);
       for (const d of directives) {

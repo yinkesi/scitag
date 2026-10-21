@@ -1,0 +1,10 @@
+﻿material_id,材料,材料族,状态/形态,标准/牌号,主要成分,密度-g/cm3,抗拉强度-MPa,屈服强度-MPa,断裂伸长率-%,弹性模量-GPa,熔点-C,玻璃化温度-C,完全质量损失-月,FDA合规,数据用途,来源,原始URL,访问日期
+M001,"Magnesium WE43-T6, Cast",Mg合金,铸造+T6,UNS M18430,Mg余量；Y 3.7-4.3%；Nd 2.4-4.4%；Zr 0.40-1.0%,1.84,250,162,2,44.2,545-640,,,,基础物性可用；无腐蚀动力学,MatWeb,https://www.matweb.com/search/DataSheet.aspx?MatGUID=4b8a8c13cf354fc5893a40cf8eca022c,2026-10-18
+M002,"Magnesium AZ31B-H24, Hard Rolled Sheet",Mg合金,硬轧板材 H24,UNS M11311,Mg余量 96%；Al 2.5-3.5%；Zn 0.60-1.4%；Mn >=0.20%,1.77,290,220,15,45,605-630,,,,基础物性可用；无降解曲线,MatWeb,https://www.matweb.com/search/DataSheet.aspx?MatGUID=d1e286e1ac0742358544b953bbf3c2e9,2026-10-18
+M003,"Magnesium ZK60A-T5, Extruded",Mg合金,挤压 T5,UNS M16600,Mg余量 94%；Zn 4.8-6.2%；Zr >=0.45%,1.83,365,305,11,45,520-635,,,,基础物性可用；无疲劳或腐蚀曲线,MatWeb,https://www.matweb.com/search/DataSheet.aspx?MatGUID=2b98d1c524174ef1a7aec46a8bed7f62,2026-10-18
+M004,"Zinc, Zn",Zn,纯元素,EN 988 (Min. 99.99%),Zn 100%,7.1,37,,,96.5,419.58,,,,纯锌基础值；不是医用 Zn-Cu/Mg 合金,MatWeb,https://www.matweb.com/search/DataSheet.aspx?MatGUID=8909140a76074049809ad74d536ed606,2026-10-18
+M005,"Iron, Fe",Fe,纯元素,,Fe 100%,7.87,540,50,,200,1535,,,,纯铁基础值；不是 Fe-Mn 医用合金,MatWeb,https://www.matweb.com/search/DataSheet.aspx?MatGUID=654ca9c358264b5392d43315d8535b7d,2026-10-18
+P001,Zeus Absorv Poly(L-lactide) (PLLA),PLLA,生物可吸收聚合物,,PLLA,,65,,,3.00-4.00,180-190,60,18-36,Yes,基础物性+近似完全吸收时间；无逐时点曲线,MatWeb,https://www.matweb.com/search/DataSheet.aspx?MatGUID=76bd524b12034073ad89174edbcf94db,2026-10-18
+P002,Zeus Absorv PLGA (85L/15G),PLGA,生物可吸收共聚物,,L-lactide 85 / glycolide 15,,65,,,2.00-4.00,140-150,55,12-18,Yes,基础物性+近似完全吸收时间；无分子量/强度保留曲线,MatWeb,https://www.matweb.com/search/DataSheet.aspx?MatGUID=a6ed8b3af42f4a0b9ca819009431c388,2026-10-18
+P003,Zeus Absorv Poly(e-caprolactone) (PCL),PCL,生物可吸收聚合物,,PCL,,25,,,0.200-0.400,55-65,-60,24-36,Yes,基础物性+近似完全吸收时间；无逐时点曲线,MatWeb,https://www.matweb.com/search/DataSheet.aspx?MatGUID=aeb6744f31174de783545b34db8613e0,2026-10-18
+P004,Zeus Absorv Polydioxanone (PDO),PDO,生物可吸收聚合物,,PDO,,65,,,0.400-1.00,100-110,-10,5-9,Yes,基础物性+近似完全吸收时间；无逐时点曲线,MatWeb,https://www.matweb.com/search/DataSheet.aspx?MatGUID=ac91ccbf260c4a62b5200a951546a234,2026-10-18

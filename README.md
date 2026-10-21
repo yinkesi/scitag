@@ -1,4 +1,4 @@
-# SciTag —— 课题组式多智能体科研协作平台
+﻿# SciTag —— 课题组式多智能体科研协作平台
 
 > 仓库：https://github.com/yinkesi/scitag（私有）· 完整检查：`npm test`（冒烟、边界、权限、恢复、真实分析与工具调用）
 
@@ -111,23 +111,48 @@ curl -X POST :8093/api/tasks/<taskId>/report -H "authorization: Bearer <agent-to
 
 平台内有执行后端的 agent（`adapter.kind: echo|analysis|llm|webhook`）由引擎排队代跑，
 LLM 后端配 `adapter.options: {baseUrl, model, apiKey?, enableTools?}`（OpenAI 兼容接口）。
-挂载 bone-scaffold 时默认开放受控分析工具；不支持工具调用的服务可设置 `enableTools:false`。
+**哪些分析命令可用由域包自己声明**：`domain.json` 的 `analysis` 块写脚本、数据、工具名与命令/参数，
+平台按声明注册 `analysis` 后端的选项和 LLM 工具（当前 bone-scaffold 是 `analyze_scaffold`：
+stats/fit/inverse；vascular-stent 是 `run_stent_tool`：materials/ring/flow/concept/verify/all）。
+不支持工具调用的服务可设置 `enableTools:false`；参数逐项类型校验，模型输出永远不会变成 shell。
 
-## 域包（外挂知识库 + 技能 + 数据）
+## 域包（外挂知识库 + 技能 + 数据 + 可执行分析）
+
+`domains/` 下每个目录就是一个域包，平台启动/每 3 s 懒扫描一次，换领域零改码。仓库自带两个：
 
 ```
-domains/bone-scaffold/
-├── domain.json                  # {name, version, description, data}
-├── kb/*.md                      # 知识库：文件名即条目，标题命中加权检索
-│   ├── 论文方法论.md  数据字典.md  研究任务口径.md  术语表.md
-├── skills/*/SKILL.md            # 技能：frontmatter(name/description/triggers)+操作指引
-│   ├── scaffold-explain（可解释性归因）
-│   ├── scaffold-model（函数建模与基础函数分析）
-│   └── scaffold-inverse（逆设计：output 区间 → input 范围）
-├── data/BONE_SCAFFOLD.xlsx      # 100 行 COMSOL 仿真（Vf×角度全因子）
-│   └── images/Untitled001-100.png
-└── scripts/analyze.py           # stats/fit/inverse，纯 Python 最小二乘
+domains/
+├── bone-scaffold/               # 骨支架：COMSOL 100 行全因子数据 + 可解释性/建模/逆设计
+│   ├── domain.json              # name/version/description/data/searchAliases/analysis
+│   ├── kb/*.md                  # 知识库：文件名即条目，标题命中加权检索
+│   ├── skills/*/SKILL.md        # 技能：frontmatter(name/description/triggers)+操作指引
+│   ├── data/BONE_SCAFFOLD.xlsx  # 100 行 COMSOL 仿真（Vf×角度全因子）
+│   │   └── images/Untitled001-100.png
+│   └── scripts/analyze.py       # stats/fit/inverse，纯 Python 最小二乘
+└── vascular-stent/              # 可吸收血管支架：MatWeb 材料库 + 物理模型/验证口径
+    ├── domain.json              # analysis: materials/ring/flow/concept/verify/all
+    ├── kb/*.md                  # 7 条：模型/器械血流/材料/验证/载药边界/封堵与病例输入/术语
+    ├── skills/*/SKILL.md        # stent-material-select / stent-validation / vascular-concept-screen
+    ├── data/MatWeb*.csv         # 9 材料 × 18 列 + 65 条属性明细（含来源 URL/访问日期）
+    └── scripts/stent_tool.py    # 零依赖：材料/薄环/泊肃叶/概念筛选(载药vs封堵)/数值自检
 ```
+
+域包可在 `domain.json` 里声明可执行分析（示例）：
+
+```json
+"analysis": {
+  "script": "scripts/stent_tool.py",
+  "data": ["data/MatWeb材料汇总_2026-10-18.csv"],
+  "tool": { "name": "run_stent_tool", "description": "…" },
+  "commands": [
+    { "name": "ring", "label": "薄环刚度", "args": ["ring", "--json"],
+      "params": { "E": { "type": "number", "required": true, "positive": true, "flag": "--E",
+                         "label": "弹性模量（GPa）" } } }
+  ]
+}
+```
+
+平台对脚本与数据做不可变快照、记录 SHA256/参数/退出码/原始输出；模型只能从声明的命令与参数里取值。
 
 - 派活时点名技能（`skills:[...]` 或消息里 `#技能名`），引擎把**技能全文 + KB 检索 top3/域**
   注入任务上下文——这就是「外挂」的落点。
@@ -173,26 +198,31 @@ Vercel 部署使用 Supabase 共享存储和短轮询，禁用演示凭据、匿
 这是面向小课题组的共享快照存储，采用版本条件写入避免并发覆盖；大规模使用应迁移到按实体分表存储。
 本地文件不自动跨电脑共享；当前自动交接报告文本，二进制成果需独立的私有存储。
 
-## 真实分析与核验记录（2026-10-05）
+## 真实分析与核验记录（2026-10-05，2026-10-20 扩展为域包声明）
 
-网页「接入新 agent」选择「科研分析（真实数据计算）」，绑定主人、挂载 bone-scaffold，
-再选择数据统计、函数拟合或逆设计；逆设计填写 compliance 目标上限。随后由课题领导派活，
-报告仍先进入主人私聊。主人点「查看全文」可以展开核验记录、原始输出、历史版本与审阅意见。
+网页「接入新 agent」选择「科研分析（真实数据计算）」，绑定主人、挂载域包，再从该域包声明的
+分析步骤里选（bone-scaffold：数据统计/函数拟合/逆设计；vascular-stent：材料对比/薄环刚度/
+泊肃叶基准/数值验证/全部基准），按提示填参数。随后由课题领导派活，报告仍先进入主人私聊。
+主人点「查看全文」可以展开核验记录、原始输出、历史版本与审阅意见。
 
-也可通过 API 配置：
+也可通过 API 配置（示例一：骨支架逆设计；示例二：血管支架材料筛选）：
 
 ```json
-{
-  "kind": "agent", "name": "分析员", "owner": "王研", "domains": ["bone-scaffold"],
-  "adapter": { "kind": "analysis", "options": { "domain": "bone-scaffold", "command": "inverse", "target": 1e-9 } }
-}
+{ "kind": "agent", "name": "分析员", "owner": "王研", "domains": ["bone-scaffold"],
+  "adapter": { "kind": "analysis", "options": { "domain": "bone-scaffold", "command": "inverse", "target": 1e-9 } } }
 ```
 
-`analysis` 是确定性的计算后端，不需要模型接口。`llm` 则可由模型调用 `analyze_scaffold`
-工具，最多四次模型请求，支持 stats / fit / inverse 三种操作；未经挂载的域和未知工具会被拒绝。
-每次计算使用脚本和数据的临时快照，保存 SHA256、执行参数、UTC 时间、退出码与完整原始输出。
-`SCITAG_PYTHON` 可指定 Python 可执行文件路径。模型的解释仍须由主人判断；实际执行记录包括失败，
-不会因为模型声称成功而被隐藏。
+```json
+{ "kind": "agent", "name": "支架分析员", "owner": "王研", "domains": ["vascular-stent"],
+  "adapter": { "kind": "analysis", "options": { "domain": "vascular-stent", "command": "materials", "params": { "family": "polymer" } } } }
+```
+
+`analysis` 是确定性的计算后端，不需要模型接口。`llm` 则由模型调用**已挂载域包各自的工具**
+（bone-scaffold → `analyze_scaffold`；vascular-stent → `run_stent_tool`），最多四次模型请求；
+未经挂载的域、未声明命令与未知工具都会被拒绝，参数逐项校验（数值/枚举/必填/正数）。
+每次计算使用脚本与声明数据的临时快照，保存 domain/command/params/args、数据与脚本 SHA256、
+UTC 时间、退出码与完整原始输出。`SCITAG_PYTHON` 可指定 Python 可执行文件路径。
+模型的解释仍须由主人判断；实际执行记录包括失败，不会因为模型声称成功而被隐藏。
 
 成果审批前，只有主人和执行 agent 可查看正文、摘要及来源；领导和群内研究者看到进度。
 批准后群内研究者可读当前成果及来源，历史草稿仅主人和执行 agent 可读。
@@ -208,3 +238,4 @@ Vercel 部署使用 Supabase 共享存储和短轮询，禁用演示凭据、匿
 
 完整测试由 `npm test` 统一执行；只验证 Node 平台可运行 `npm run test:core`。
 GitHub Actions 配置 Windows / Linux、Node 18 / 24 的测试矩阵，自动安装分析依赖后运行同一检查入口。
+

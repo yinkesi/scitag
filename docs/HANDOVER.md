@@ -33,8 +33,11 @@ node test-edge.mjs    # 20 对抗探针：重复审批/非法输入/死地址后
 | `routing.js` | @ 路由纯函数（agent-tag 原样派生） |
 | `workflow.js` | 任务状态机纯函数：`dispatched→working→reported→approved→published`，reject 回炉、attempts 熔断 |
 | `engine.mjs` | per-agent FIFO 执行队列，job 注入域包上下文（技能全文+KB top3） |
-| `adapters.mjs` | 后端注册表：echo（离线演示）/ llm（OpenAI 兼容）/ webhook |
-| `domains/bone-scaffold/` | 域包：kb 四条 + 技能三个 + COMSOL 数据集 + analyze.py |
+| `adapters.mjs` | 后端注册表：echo（离线演示）/ analysis（域包声明驱动）/ llm（OpenAI 兼容，工具按挂载域注册）/ webhook |
+| `analysis-spec.mjs` | 域包 `analysis` 声明解析/校验、参数→argv、OpenAI 工具 schema（纯函数） |
+| `research.mjs` | 分析执行：脚本+数据快照、argv 调 Python、SHA256/参数/原始输出 provenance |
+| `domains/bone-scaffold/` | 域包：kb 四条 + 技能三个 + COMSOL 数据集 + analyze.py（stats/fit/inverse） |
+| `domains/vascular-stent/` | 域包：kb 五条 + 技能两个 + MatWeb 材料库 + stent_tool.py（materials/ring/flow/verify/all） |
 
 ### 前端（交接对象）
 
@@ -50,6 +53,11 @@ node test-edge.mjs    # 20 对抗探针：重复审批/非法输入/死地址后
 `/api/messages` GET/POST、`/api/channels` POST（开私聊）、`/api/missions` POST/GET、
 `/api/missions/:id/tasks|summarize` POST、`/api/tasks/:id/report|review`、`/api/tasks/:id` GET（成果全文）、
 `/api/domains/:d/kb[/:name]`、`/api/health`（顶栏作业数轮询）。
+
+**分析表单契约**：接 agent 弹窗的「科研分析」不再硬编码命令。`/api/state` 的 `domains[]` 带
+`analysis`（来自域包 `domain.json`：`{tool, data, commands:[{name,label,description,params}]}`），
+前端据此渲染「分析域包 / 分析步骤 / 参数」三组控件；注册时提交
+`adapter.options = {domain, command, params}`。域包声明无效时 `analysis = {error}`，该域不出现在下拉里。
 
 **SSE**：`GET /api/stream?token=`，事件 `message` / `channel` / `mission` / `task` / `presence` /
 `receipt`。`connectSSE` 里对各类型的处理就是刷新策略，改结构时保持"收到事件→更新对应面板"语义。

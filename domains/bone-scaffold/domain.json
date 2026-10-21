@@ -15,5 +15,43 @@
     "rows": 100,
     "images_count": 100,
     "source": "用户提供（COMSOL 6.2 导出，2026-06-30）；论文：Deep Learning Accelerated Multi-Objective Topology Optimization for Additive Manufacturing of Biomechanical Bone Scaffolds"
+  },
+  "analysis": {
+    "script": "scripts/analyze.py",
+    "data": ["data/BONE_SCAFFOLD.xlsx"],
+    "tool": {
+      "name": "analyze_scaffold",
+      "description": "实际计算骨支架数据的统计、拟合或 compliance ≤ target 逆设计。"
+    },
+    "commands": [
+      {
+        "name": "stats",
+        "label": "数据统计",
+        "description": "各列范围与 10×10 全因子网格确认",
+        "args": ["stats"]
+      },
+      {
+        "name": "fit",
+        "label": "函数拟合",
+        "description": "compliance(Vf, θ) 最小二乘拟合与 R²/RMSE",
+        "args": ["fit"]
+      },
+      {
+        "name": "inverse",
+        "label": "逆设计",
+        "description": "给定 compliance 上限反推可行 Vf/θ 范围",
+        "args": ["inverse", "--target", "{target}"],
+        "params": {
+          "target": {
+            "type": "number",
+            "required": true,
+            "positive": true,
+            "label": "compliance 目标上限",
+            "description": "compliance 上限（有限正数，例如 1e-9）",
+            "default": 8e-11
+          }
+        }
+      }
+    ]
   }
 }

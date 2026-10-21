@@ -1,4 +1,4 @@
-/**
+﻿/**
  * adapters.mjs —— agent 执行后端注册表（SciTag 执行层）
  *
  * 派生自 teammates（D:\code\teammates）的 adapters.mjs，改动：
@@ -23,7 +23,8 @@
  */
 'use strict';
 import { spawn } from 'node:child_process';
-import { runAnalysis } from './research.mjs';
+import { runAnalysis, loadAnalysisSpec } from './research.mjs';
+import { toolSchema } from './analysis-spec.mjs';
 
 export const DEFAULT_TIMEOUT_MS = 300_000; // 单任务执行上限（真 harness 级的活给足时间）
 export const MAX_OUTPUT = 12_000;          // 成果正文截断（report 上限 20k，留群消息摘要余地）
@@ -112,6 +113,26 @@ export function buildPrompt(job) {
 
 const DIRECTIVE_RE = /\[\[\s*(handoff|task)\s*[:：]\s*([^\[\]]+?)\s*\]\]/gi;
 
+/** 从自由文本里抽病例参数（预执行工具用；只认明确的数值表述）。 */
+export function parseCaseParams(text) {
+  const num = (re) => {
+    const m = String(text || '').match(re);
+    return m ? Number(m[1]) : undefined;
+  };
+  const params = {};
+  const lesion = num(/(?:缺损|病变)[^\d]{0,12}(\d+(?:\.\d+)?)\s*mm/i);
+  const vessel = num(/(?:目标血管|血管直径)[^\d]{0,12}(\d+(?:\.\d+)?)\s*mm/i);
+  const length = num(/(?:病变长度|长度)[^\d]{0,12}(\d+(?:\.\d+)?)\s*mm/i);
+  const pressure = num(/(\d+(?:\.\d+)?)\s*mmHg/i);
+  if (lesion !== undefined) params.lesion_mm = lesion;
+  if (vessel !== undefined) params.vessel_mm = vessel;
+  if (length !== undefined) params.length_mm = length;
+  if (pressure !== undefined) params.pressure_mmhg = pressure;
+  const loc = String(text || '').match(/(?:肿瘤位置|位置|部位)[「:：]?\s*([^，。；\n]{2,30})/);
+  if (loc) params.location = loc[1].trim();
+  return params;
+}
+
 /** 从回复里剥出指令，返回 {cleanText, directives:[{type,title,detail}]}。 */
 export function parseDirectives(text) {
   const directives = [];
@@ -195,9 +216,11 @@ registerAdapter({
   id: 'analysis',
   label: '科研分析（真实数据计算）',
   async exec(job, options = {}) {
-    const domain = options.domain || 'bone-scaffold';
+    const domain = String(options.domain || 'bone-scaffold');
     if (!job.domains?.includes(domain)) return { ok: false, text: `agent 未挂载分析域 ${domain}` };
-    const result = await runAnalysis({ domain, command: options.command || 'stats', target: options.target });
+    const params = { ...(options.params && typeof options.params === 'object' && !Array.isArray(options.params) ? options.params : {}) };
+    if (options.target !== undefined && params.target === undefined) params.target = options.target;
+    const result = await runAnalysis({ domain, command: options.command, params });
     return { ...result, analysisRuns: [result] };
   },
 });
@@ -213,17 +236,45 @@ registerAdapter({
     const timer = setTimeout(() => ctrl.abort(), options.timeoutMs || 120_000);
     const analysisRuns = [];
     const evidence = () => ({ analysisRuns, provenance: analysisRuns.at(-1)?.provenance || null });
-    const enabled = options.enableTools !== false && job.domains?.includes('bone-scaffold');
-    const tools = enabled ? [{ type: 'function', function: {
-      name: 'analyze_scaffold', description: '实际计算骨支架数据的统计、拟合或 compliance ≤ target 逆设计。',
-      parameters: { type: 'object', properties: {
-        command: { type: 'string', enum: ['stats', 'fit', 'inverse'] },
-        target: { type: 'number', description: 'inverse 必填，有限正数' },
-      }, required: ['command'], additionalProperties: false },
-    } }] : undefined;
-    const messages = [
+    // 挂载了哪些域包，就按域包的 analysis 声明注册哪些工具（不再写死 bone-scaffold）。
+    const mounted = [];
+    if (options.enableTools !== false) {
+      for (const domain of job.domains || []) {
+        let loaded = null;
+        try { loaded = await loadAnalysisSpec(domain); } catch (error) {
+          console.error(`[llm:analysis-spec] ${domain}:`, error.message);
+        }
+        if (!loaded?.spec?.tool) continue;
+        const schema = toolSchema(loaded.spec);
+        if (!schema || mounted.some((item) => item.schema.name === schema.name)) continue;
+        mounted.push({ domain, spec: loaded.spec, schema });
+      }
+    }
+    let tools = mounted.length
+      ? mounted.map((item) => ({ type: 'function', function: item.schema }))
+      : undefined;
+    // 预执行工具：避免模型「假装调用」，也避免第二轮长上下文把 8GB 显卡打爆。
+    let preflight = null;
+    if (options.forceToolCommand && mounted.length && job.kind === 'chat') {
+      const tool = mounted.find((item) => item.spec.commands.has(options.forceToolCommand));
+      if (tool) {
+        const params = parseCaseParams(String(job.text || ''));
+        if (params.lesion_mm !== undefined) {
+          try {
+            preflight = await runAnalysis({ domain: tool.domain, command: options.forceToolCommand, params }, { signal: ctrl.signal });
+            analysisRuns.push(preflight);
+          } catch (error) { preflight = { ok: false, text: String(error?.message || error) }; }
+        }
+      }
+    }
+    if (preflight) tools = undefined;
+    const messages = preflight ? [
+      { role: 'system', content: '你是严谨的科研协作 agent。下面是分析工具的真实运行结果，必须只依据它作答并引用其中具体数字；不得编造，工具失败时如实说明。' },
+      { role: 'user', content: `病例：${String(job.text || '').slice(0, 800)}\n\n[工具真实输出]\n${JSON.stringify(preflight).slice(0, 3500)}\n\n请基于工具结果给 3–6 条结论：A 载药是否可行、B 封堵建议、材料短名单、数据缺口。` },
+    ] : [
       { role: 'system', content: '你是一个严谨的科研协作 agent，成果供人类研究者审阅。涉及数值计算时须调用可用的分析工具，以其真实输出为依据。工具失败要明确说明，禁止编造计算结果。' },
       { role: 'user', content: buildPrompt(job) },
+      ...(tools ? [{ role: 'user', content: '【硬性流程】本任务包含数值/病例参数。你必须通过 tool_calls 调用分析工具（如 run_stent_tool，command=concept 或对应命令，参数按 schema 填）取得真实计算结果，再给出结论；结论中必须引用工具返回的具体数字（如静压载荷 xxx mN、所需密封力 xxx mN、材料短名单）。禁止在正文里写伪命令或伪造工具输出；工具失败时如实说明失败与数据缺口。' }] : []),
     ];
     try {
       for (let round = 0; round < 4; round++) {
@@ -249,15 +300,24 @@ registerAdapter({
         for (const call of message.tool_calls) {
           let result;
           try {
-            if (!enabled || call.function?.name !== 'analyze_scaffold') throw new Error('工具未授权或不存在');
+            const tool = mounted.find((item) => item.schema.name === call.function?.name);
+            if (!tool) throw new Error('工具未授权或不存在');
             const input = JSON.parse(call.function.arguments);
-            if (!input || Array.isArray(input) || Object.keys(input).some(k => !['command', 'target'].includes(k))) {
-              throw new Error('工具参数形状无效');
-            }
-            result = await runAnalysis({ domain: 'bone-scaffold', command: input.command, target: input.target }, { signal: ctrl.signal });
+            if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('工具参数形状无效');
+            const { command, ...params } = input;
+            result = await runAnalysis({ domain: tool.domain, command, params }, { signal: ctrl.signal });
             analysisRuns.push(result);
           } catch (error) { result = { ok: false, text: String(error?.message || error) }; }
-          messages.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(result) });
+          const toolText = JSON.stringify(result);
+          messages.push({ role: 'tool', tool_call_id: call.id, content: toolText.length > 4000 ? toolText.slice(0, 4000) : toolText });
+        }
+        // 工具结果已拿到：第二轮改用精简上下文（只留原始提问 + 工具结果），避免长 KB/技能把 8GB 显卡打爆。
+        if (round === 0) {
+          const system = messages[0];
+          const assistant = messages.find((m) => m.role === 'assistant' && m.tool_calls);
+          const toolMsgs = messages.filter((m) => m.role === 'tool');
+          const lean = [system, { role: 'user', content: String(job.text || '').slice(0, 2000) }, assistant, ...toolMsgs];
+          messages.splice(0, messages.length, ...lean);
         }
         continue;
       }
@@ -307,3 +367,4 @@ registerAdapter({
     }
   },
 });
+

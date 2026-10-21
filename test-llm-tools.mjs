@@ -5,6 +5,64 @@ import http from 'node:http';
 import { once } from 'node:events';
 import test from 'node:test';
 import { getAdapter } from './adapters.mjs';
+import { parseCaseParams } from './adapters.mjs';
+
+const caseJob = {
+  kind: 'chat', agentName: 'stent-agent', channelName: 'lab', from: '王研',
+  domains: ['vascular-stent'], context: { kb: [], skills: [] }, history: [],
+  text: '病例：缺损 4.0 mm，目标血管 3.0 mm，病变长度 10 mm，血压 100 mmHg，术式意向：断流栓塞。',
+};
+
+test('parseCaseParams extracts only explicit case numbers', () => {
+  assert.deepEqual(parseCaseParams(caseJob.text), {
+    lesion_mm: 4.0, vessel_mm: 3.0, length_mm: 10, pressure_mmhg: 100,
+  });
+  assert.deepEqual(parseCaseParams('没有数值的文本'), {});
+  assert.equal(parseCaseParams('缺损 4 mm').lesion_mm, 4);
+});
+
+test('forceToolCommand pre-executes the real tool once and feeds its JSON to the model', async () => {
+  await withModel(() => ({ role: 'assistant', content: '基于工具：需密封力 335.1 mN。' }), async (options, requests) => {
+    const result = await getAdapter('llm').exec(caseJob, { ...options, enableTools: true, forceToolCommand: 'concept' });
+    assert.equal(result.ok, true);
+    assert.equal(requests.length, 1, 'preflight replaces the model-initiated tool round');
+    assert.equal(requests[0].body.tools, undefined);
+    const prompt = requests[0].body.messages.map((m) => String(m.content || '')).join('\n');
+    assert.match(prompt, /\[工具真实输出\]/);
+    assert.match(prompt, /required_sealing_force_mn/);
+    assert.equal(result.analysisRuns.length, 1);
+    assert.equal(result.analysisRuns[0].provenance.command, 'concept');
+    assert.equal(result.analysisRuns[0].provenance.domain, 'vascular-stent');
+    assert.match(result.text, /335\.1/);
+  });
+});
+
+test('preflight is skipped when the case text has no lesion size', async () => {
+  const noCase = { ...caseJob, text: '请介绍一下你们的域包有哪些能力。' };
+  await withModel(() => ({ role: 'assistant', content: '普通回答' }), async (options, requests) => {
+    const result = await getAdapter('llm').exec(noCase, { ...options, enableTools: true, forceToolCommand: 'concept' });
+    assert.equal(result.ok, true);
+    assert.equal(requests.length, 1);
+    assert.ok(requests[0].body.tools?.length, 'falls back to normal tool-calling prompt');
+    assert.equal(result.analysisRuns?.length || 0, 0);
+  });
+});
+
+test('after a tool round the follow-up uses a lean context (no KB/skills bloat)', async () => {
+  const rich = { ...caseJob, context: { kb: [{ name: 'k', snippet: 'x'.repeat(500) }], skills: [{ name: 's', body: 'y'.repeat(2000) }] } };
+  await withModel((n) => n === 1
+    ? toolCall({ command: 'concept', lesion_mm: 4 }, 'run_stent_tool')
+    : { role: 'assistant', content: '结论' }, async (options, requests) => {
+    const result = await getAdapter('llm').exec(rich, options);
+    assert.equal(result.ok, true);
+    assert.equal(requests.length, 2);
+    const followUp = requests[1].body.messages;
+    assert.ok(followUp.length <= 5, 'system + case + tool_call + tool result');
+    assert.ok(!followUp.some((m) => String(m.content || '').includes('【硬性流程】')));
+    assert.ok(followUp.some((m) => m.role === 'tool'));
+    assert.equal(result.analysisRuns.length, 1);
+  });
+});
 
 const job = {
   kind: 'task', agentName: 'research-agent', channelName: 'lab',

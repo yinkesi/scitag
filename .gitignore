@@ -8,3 +8,7 @@ __pycache__/
 .env*
 .scitag-workers/
 worker.*.json
+
+# submission video intermediates (keep final mp4/pdf/figures)
+submission/video/
+submission/frame-*.png

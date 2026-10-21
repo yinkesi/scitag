@@ -171,7 +171,11 @@ domains/<pkg>/
 ├── domain.json   { "name": "bone-scaffold", "version": "1.0.0",
                     "description": "骨支架多目标拓扑优化研究",
                     "data": { "xlsx": "data/BONE_SCAFFOLD.xlsx",
-                              "images": "data/images/", "count": 100 } }
+                              "images": "data/images/", "count": 100 },
+                    "analysis": { "script": "scripts/analyze.py",
+                                  "data": ["data/BONE_SCAFFOLD.xlsx"],
+                                  "tool": { "name": "analyze_scaffold", "description": "…" },
+                                  "commands": [ { "name": "stats", "args": ["stats"] }, … ] } }
 ├── kb/<条目>.md     一文件一主题，文件名即条目名；检索时标题命中加权
 ├── skills/<名>/SKILL.md   frontmatter: name/description/triggers[]；
 │                     body 是给 agent 宿主的操作指引（含脚本用法）
@@ -189,6 +193,11 @@ domains/<pkg>/
 [群聊背景] 最近 10 条相关消息
 [产出要求] 按技能里的报告格式；输出将先交你主人审阅
 ```
+
+`analysis` 块是「可执行外挂」的声明（不是代码）：`script` 与 `data` 只允许域包内相对路径；
+`commands[].args` 是 argv 模板（`{param}` 占位），`params` 声明 number/string/boolean、必填、正数、
+枚举与追加 flag。平台只执行声明里的命令、按声明校验参数值，并在不可变快照上运行（见 §14）。
+域包声明写错时 `GET /api/domains` 返回 `analysis: {error}`，其余资源照常可用。
 
 ## 8. 权限矩阵
 
@@ -281,21 +290,27 @@ domains/<pkg>/
   已结束 task 的残留 job 在恢复时不重复执行。执行中崩溃恢复仍属于至少一次执行语义，可能重跑计算。
 - `persistence.mjs` 是单写入点；最多800ms合并写，原子替换并保留上一有效 `.bak`。
   ENOENT 才播种演示；损坏文件先存 `.corrupt-*` 再恢复有效备份，无有效备份明确拒绝启动。
-- `research.mjs` 的白名单为 bone-scaffold 的 stats/fit/inverse。对脚本和xlsx创建不可变临时快照，
-  用 argv 调 Python、不经 shell；60s 超时、输出256KiB上限、支持取消。保存来源和完整原始输出，
-  非零退出为失败；Python可执行路径由 `SCITAG_PYTHON` 指定，客户端不能指定命令或路径。
-- `analysis` adapter 可无LLM直接计算。`llm` adapter 为已挂载域开放 `analyze_scaffold`，
-  最多四次模型请求，每轮最多四个调用，逐项验证工具名称、挂载域与参数，保留全部实际分析记录。
-  `enableTools:false` 支持不接受工具请求的兼容接口；工具结果仍需owner核验，不把模型解释当作计算事实。
+- `research.mjs` 不再写死分析域：域包在 `domain.json` 的 `analysis` 块里声明脚本、数据文件、工具名与命令
+  （`analysis-spec.mjs` 校验：相对路径、命令/参数白名单字符集、number/string/boolean 逐项校验）。
+  对脚本和声明的数据文件创建不可变临时快照，用 argv 调 Python、不经 shell；60s 超时、输出256KiB上限、支持取消。
+  保存 domain/command/params/args/at/dataSha256(s)/scriptSha256/退出码/原始输出；Python 可执行路径由
+  `SCITAG_PYTHON` 指定，客户端不能指定命令或路径。当前 bone-scaffold（stats/fit/inverse）与
+  vascular-stent（materials/ring/flow/verify/all）都走同一套声明。
+- `analysis` adapter 可无LLM直接计算，`options` 为 `{domain, command, params}`（兼容旧的 `target` 字段）。
+  `llm` adapter 为**每个**已挂载、且声明了 `analysis.tool` 的域包各注册一个工具（bone-scaffold 仍是
+  `analyze_scaffold`，vascular-stent 为 `run_stent_tool`），最多四次模型请求，每轮最多四个调用，
+  逐项验证工具名称、挂载域与参数，保留全部实际分析记录。`enableTools:false` 支持不接受工具请求的兼容接口；
+  工具结果仍需 owner 核验，不把模型解释当作计算事实。
 - `GET /api/tasks/:id` 为允许读正文者返回 `provenance`、`analysisRuns`；仅owner/assignee返回 `reportVersions`、
-  `failReason`。provenance包含 domain/command/args/at/dataSha256/scriptSha256/exitCode/stdout/stderr/output。
+  `failReason`。provenance包含 domain/command/params/args/at/dataSha256/dataSha256s/scriptSha256/exitCode/stdout/stderr/output。
   每个 reportVersion 包含 attempt/report/provenance/analysisRuns/review/at，重做保留旧版本。
   外部report接口只能交正文，不能伪造平台验证过的来源；旧数据在下一次审阅时补上已有报告的版本记录。
 - 中文KB检索使用分词、域包 searchAliases、标题加权，返回实际命中段落和source路径，仍不使用向量数据库。
   逆设计的上限约束高于全表最大值时返回全部可行；拟合把log域与原尺度指标分开报告。
-- 网页接入表单支持analysis步骤/目标、LLM地址/模型/密钥/工具开关、webhook地址。
-  成果弹窗新增核验记录、全部分析（含单次失败）与历史审阅。保留既有布局和配色。
+- 网页接入表单按 `/api/state` 返回的 `domains[].analysis` 动态渲染分析域包/步骤/参数（无硬编码命令）；
+  LLM地址/模型/密钥/工具开关、webhook地址不变。成果弹窗新增核验记录、全部分析（含单次失败）与历史审阅。
+  保留既有布局和配色。
 
-检查入口 `npm test` 顺序运行语法检查、46冒烟、20边界、25模块与工具测试、119权限/工作流/真实分析回归。
+检查入口 `npm test` 顺序运行语法检查、46冒烟、21边界、38模块与工具测试、119权限/工作流/真实分析回归。
 完整检查依赖Python/openpyxl；`npm run test:core` 不要求Python。所有集成服务运行于临时副本，
 GitHub Actions声明Ubuntu/Windows、Node18/24、Python3.12矩阵；远端是否通过以实际Actions结果为准。
