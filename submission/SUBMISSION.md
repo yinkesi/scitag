@@ -7,18 +7,21 @@ Everything needed for the Open Scientific Intelligence Hackathon submission is i
 | File | Purpose |
 | --- | --- |
 | `ONE-PAGER.md` / `one-pager.pdf` | One-page summary (English, A4) |
-| `VIDEO-SCRIPT.md` | Script and shot list for the 4-minute video |
-| `scitag-adaption-demo.mp4` | 4-minute English video (SAPI narration, slides, charts) — upload to YouTube/Drive and put the URL in the submission form |
+| `SPEECH.md` | 4-minute English speech script (timed sections + recording checklist) |
+| `OPERATIONS.md` | 操作方法：启动/演示/审计/关闭/排错（中英对照命令） |
+| `VIDEO-SCRIPT.md` | Optional shot list / slide outline |
 | `figure-winrate.png` | Win-rate ablation chart (v1 / v2 / v1-strong) |
 | `figure-pipeline.png` | System pipeline diagram |
-| `make_figures.py`, `make_onepager.py`, `make_video.py`, `tts.ps1` | Reproducible generation of the figures, PDF, and video |
+| `make_figures.py`, `make_onepager.py` | Reproducible generation of the figures and the one-pager PDF |
+
+> The demo video is **not** included: record your own with `SPEECH.md` (≤ 4:00, no speed-up). `make_video.py` / `tts.ps1` remain in the repo if a generated version is ever needed, but the submission uses the human-recorded video.
 
 ## Submission form fields (copy-paste)
 
 - **Title:** Auditable concept screening for bioresorbable vascular devices with an Adaption-tuned 4B model in SciTag
 - **One-line description:** A human-gated multi-agent harness plus a locally served 4B domain model that calls real analysis tools and records provenance; held-out preference win rate 51.67% → 90.67% by stronger LoRA training.
 - **Repo:** `https://github.com/yinkesi/scitag` (make public before submitting)
-- **Video:** upload `scitag-adaption-demo.mp4` (4:00) and paste the link
+- **Video:** record with `SPEECH.md` (≤ 4:00), upload to YouTube/Drive, paste the link
 - **One-page summary:** upload `one-pager.pdf`
 - **Track:** Adaption sponsor track (Adaptive Data + AutoScientist + local deployment)
 
@@ -31,7 +34,7 @@ Everything needed for the Open Scientific Intelligence Hackathon submission is i
 ## Before submitting — external steps (need account access)
 
 1. **Make the GitHub repo public** (it is private now; `gh` is not authenticated in this environment). If a fresh public repo is preferred, push the current working tree and remove `data/db.json` (contains local demo state).
-2. **Upload the video** to YouTube (public/unlisted) or Google Drive, set link sharing.
+2. **Record the video** using `SPEECH.md` (screen recording, ≤ 4:00, no speed-up), upload to YouTube (public/unlisted) or Google Drive, set link sharing.
 3. **Fill the official submission form** with the fields above and the one-page PDF.
 4. Optional: add a short README at repo root pointing to `submission/`.
 

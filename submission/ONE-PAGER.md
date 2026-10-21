@@ -1,4 +1,4 @@
-﻿# Auditable concept screening for bioresorbable vascular devices
+# Auditable concept screening for bioresorbable vascular devices
 ### A domain-tuned 4B model inside SciTag's human-gated multi-agent harness — Adaption sponsor track
 
 **TL;DR** — We turned a 1,392-row clinical-engineering dataset into a resident 4B domain model via Adaption's Adaptive Data + AutoScientist, then plugged it into SciTag as an OpenAI-compatible agent that calls a real analysis tool before answering. Same data, stronger LoRA: the platform's held-out preference win rate went from **51.67% → 90.67%**. Every answer carries tool provenance (domain, command, exit code, SHA-256 data hashes), so a human owner can audit the number, not just the prose.
@@ -45,7 +45,7 @@ Local held-out check (12 prompts, greedy, 4-bit): numeric recall 27.8% → **33.
 - Training: `upload_and_train*.py` (Adaption SDK 0.15.0); run IDs and win rates logged in `train-state*.json`.
 - Serving: `serve_adapted.py` (tools + `<tool_call>` parsing); merging: `merge_lora_stream.py`.
 - Harness: `scitag` repo with new tests `test-llm-tools.mjs` (10 tests covering pre-flight, lean tool round, rejection paths) and full `npm test` green (119 regression + suites).
-- Repo: `https://github.com/yinkesi/scitag` · Video: `<link>` · Dataset: see `submission/` and notes.
+- Repo: `https://github.com/yinkesi/scitag` · Demo: `submission/OPERATIONS.md` (run guide) + `submission/SPEECH.md` (4-min talk) · Dataset: see `submission/` and notes.
 
 ## 6. Limitations & safety
 
