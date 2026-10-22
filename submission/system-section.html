@@ -1,0 +1,14 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+@page { size: A4; margin: 15mm 15mm 13mm 15mm; }
+body { font-family: 'Segoe UI', Arial, sans-serif; color:#1d232b; font-size: 9.9pt; line-height:1.45; }
+h1 { font-size: 18pt; margin: 0 0 2mm 0; color:#14324f; }
+h2 { font-size: 12.5pt; margin: 4.5mm 0 1.5mm 0; color:#14324f; border-bottom:1px solid #d8e0e8; padding-bottom:1mm; }
+p { margin: 1.4mm 0; }
+em { color:#5b6b7a; }
+ol { margin: 1.5mm 0 0 5mm; padding: 0; }
+li { margin: 1.2mm 0; }
+</style></head><body><h1>System direction — approach, results, next steps</h1>
+<p><strong>Approach.</strong> SciTag is a human-gated multi-agent harness: each agent mounts a domain package (knowledge base, skills, data, and tools declared in <code>domain.json</code>). In the <code>vascular-stent</code> package, a zero-dependency Python tool computes drug-payload budgets, defect pressure loads, required sealing forces, and material shortlists with degradation screening; every run returns provenance (command, parameters, exit code, SHA-256 of data and script). Agents report to their human owner, who approves before publication.</p>
+<p>Adaption turns the same domain knowledge into a local model: 1,392 instruction rows (144 held out) → Adaptive Data → AutoScientist LoRA on Qwen3.5-4B. The adapter is merged into the base weights and served 4-bit (≈3.2 GB VRAM, ≈5 tokens/s) behind an OpenAI-compatible endpoint, then registered in SciTag as a resident agent. The harness pre-executes the <code>concept</code> tool on the case text and feeds the real JSON to the model, so answers cite tool numbers instead of model guesses.</p>
+<p><strong>Results.</strong> Same data, three training runs: default LoRA reached <strong>51.67%</strong> win rate (a tie with base); a reasoning-trace dataset scored <strong>40.43%</strong> (negative result); stronger LoRA (r=32, 3 epochs, lr 1e-4) reached <strong>90.67%</strong>. On a local held-out check, numeric recall improved from <strong>27.8% to 33.6%</strong> and required-phrase coverage from <strong>22.5% to 38.6%</strong>. End to end, a hepatic-artery case (4.0 mm lesion, 3.0 mm vessel, 100 mmHg, permanent embolization) reports the drug arm at ≈270 µg (1.39×10⁻⁵ of an oral dose, not viable), the occlusion arm at 167 mN static load → <strong>0.335 N</strong> sealing force, and Fe/Zn/Mg frames passing the 1.5× margin — with an audit record (<code>concept</code>, exit 0, SHA-256). The harness passes its full suite (119 regression tests plus 10 tool-protocol tests).</p>
+<p><strong>Next steps.</strong> Add corrosion/fatigue kinetics and more polymer grades; collect 20–30 clinician reviews and run a DPO preference pass; benchmark the tuned 4B model against a larger open model; package one-command local deployment with a user guide and demo video.</p></body></html>

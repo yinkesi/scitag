@@ -7,12 +7,13 @@ Everything needed for the Open Scientific Intelligence Hackathon submission is i
 | File | Purpose |
 | --- | --- |
 | `ONE-PAGER.md` / `one-pager.pdf` | One-page summary (English, A4) |
+| `SYSTEM-SECTION.md` / `system-section.pdf` | System-direction report section (approach / results / next steps, one page) — merge with the teammate's materials section |
 | `SPEECH.md` | 4-minute English speech script (timed sections + recording checklist) |
 | `OPERATIONS.md` | 操作方法：启动/演示/审计/关闭/排错（中英对照命令） |
 | `VIDEO-SCRIPT.md` | Optional shot list / slide outline |
 | `figure-winrate.png` | Win-rate ablation chart (v1 / v2 / v1-strong) |
 | `figure-pipeline.png` | System pipeline diagram |
-| `make_figures.py`, `make_onepager.py` | Reproducible generation of the figures and the one-pager PDF |
+| `make_figures.py`, `make_onepager.py`, `make_system_section.py` | Reproducible generation of the figures, one-pager, and system section PDF |
 
 > The demo video is **not** included: record your own with `SPEECH.md` (≤ 4:00, no speed-up). `make_video.py` / `tts.ps1` remain in the repo if a generated version is ever needed, but the submission uses the human-recorded video.
 
