@@ -7,13 +7,14 @@ Everything needed for the Open Scientific Intelligence Hackathon submission is i
 | File | Purpose |
 | --- | --- |
 | `ONE-PAGER.md` / `one-pager.pdf` | One-page summary (English, A4) |
-| `SYSTEM-SECTION.md` / `system-section.pdf` | System-direction report section (approach / results / next steps, one page) — merge with the teammate's materials section |
+| `SYSTEM-SECTION.md` / `system-workflow.pdf` | System-direction report section (approach / results / next steps) with a two-lane workflow diagram; one A4 page — merge with the teammate's materials section |
 | `SPEECH.md` | 4-minute English speech script (timed sections + recording checklist) |
 | `OPERATIONS.md` | 操作方法：启动/演示/审计/关闭/排错（中英对照命令） |
 | `VIDEO-SCRIPT.md` | Optional shot list / slide outline |
 | `figure-winrate.png` | Win-rate ablation chart (v1 / v2 / v1-strong) |
-| `figure-pipeline.png` | System pipeline diagram |
-| `make_figures.py`, `make_onepager.py`, `make_system_section.py` | Reproducible generation of the figures, one-pager, and system section PDF |
+| `figure-pipeline.png` | Legacy system diagram (superseded by `figure-workflow.png`) |
+| `figure-workflow.png` | Polished workflow diagram embedded in `system-workflow.pdf` |
+| `make_figures.py`, `make_onepager.py`, `make_workflow_figure.py`, `make_workflow_pdf.py` | Reproducible generation of figures, one-pager, workflow diagram, and the system PDF |
 
 > The demo video is **not** included: record your own with `SPEECH.md` (≤ 4:00, no speed-up). `make_video.py` / `tts.ps1` remain in the repo if a generated version is ever needed, but the submission uses the human-recorded video.
 
