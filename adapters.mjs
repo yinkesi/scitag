@@ -1,4 +1,4 @@
-﻿/**
+/**
  * adapters.mjs —— agent 执行后端注册表（SciTag 执行层）
  *
  * 派生自 teammates（D:\code\teammates）的 adapters.mjs，改动：
@@ -109,6 +109,19 @@ export function buildPrompt(job) {
     ``,
     `要求：直接输出回群的发言正文（纯文本、简洁、观点明确）。这是群内讨论，不是正式成果。`,
   ].filter(Boolean).join('\n');
+}
+
+/** 从自由文本里抽 FDO 材料筛选参数（缺省用设计扫描值）。 */
+export function parseFdoParams(text) {
+  const num = (re, fallback) => {
+    const m = String(text || '').match(re);
+    return m ? Number(m[1]) : fallback;
+  };
+  return {
+    release_days: num(/(?:释放|release)[^\d]{0,10}(\d+(?:\.\d+)?)\s*(?:天|d|day)/i, 7),
+    horizon_days: num(/(?:服役|horizon|service)[^\d]{0,12}(\d+(?:\.\d+)?)\s*(?:天|d|day)/i, 90),
+    orifice_mm: num(/(?:孔口|orifice)[^\d]{0,10}(\d+(?:\.\d+)?)\s*mm/i, 0.71),
+  };
 }
 
 const DIRECTIVE_RE = /\[\[\s*(handoff|task)\s*[:：]\s*([^\[\]]+?)\s*\]\]/gi;
@@ -233,7 +246,7 @@ registerAdapter({
     const model = String(options.model || '');
     if (!baseUrl || !model) return { ok: false, text: 'llm 后端缺少 baseUrl / model 配置' };
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), options.timeoutMs || 120_000);
+    const timer = setTimeout(() => ctrl.abort(), options.timeoutMs || 240_000);
     const analysisRuns = [];
     const evidence = () => ({ analysisRuns, provenance: analysisRuns.at(-1)?.provenance || null });
     // 挂载了哪些域包，就按域包的 analysis 声明注册哪些工具（不再写死 bone-scaffold）。
@@ -254,23 +267,40 @@ registerAdapter({
       ? mounted.map((item) => ({ type: 'function', function: item.schema }))
       : undefined;
     // 预执行工具：避免模型「假装调用」，也避免第二轮长上下文把 8GB 显卡打爆。
-    let preflight = null;
-    if (options.forceToolCommand && mounted.length && job.kind === 'chat') {
-      const tool = mounted.find((item) => item.spec.commands.has(options.forceToolCommand));
-      if (tool) {
-        const params = parseCaseParams(String(job.text || ''));
-        if (params.lesion_mm !== undefined) {
-          try {
-            preflight = await runAnalysis({ domain: tool.domain, command: options.forceToolCommand, params }, { signal: ctrl.signal });
-            analysisRuns.push(preflight);
-          } catch (error) { preflight = { ok: false, text: String(error?.message || error) }; }
+    // 支持多个命令（例如 concept + fdo）：一次把真实 JSON 都喂给模型。
+    const forcedCommands = options.forceToolCommands
+      || (options.forceToolCommand ? [options.forceToolCommand] : []);
+    const preflights = [];
+    if (forcedCommands.length && mounted.length && job.kind === 'chat') {
+      for (const cmd of forcedCommands) {
+        const tool = mounted.find((item) => item.spec.commands.has(cmd));
+        if (!tool) continue;
+        let params;
+        if (cmd === 'concept') {
+          params = parseCaseParams(String(job.text || ''));
+          if (params.lesion_mm === undefined) continue;
+        } else if (cmd === 'fdo') {
+          params = parseFdoParams(String(job.text || ''));
+        } else {
+          params = {};
+        }
+        try {
+          const run = await runAnalysis({ domain: tool.domain, command: cmd, params }, { signal: ctrl.signal });
+          preflights.push(run);
+          analysisRuns.push(run);
+        } catch (error) {
+          preflights.push({ ok: false, text: String(error?.message || error) });
         }
       }
     }
+    const preflight = preflights.length
+      ? (preflights.length === 1 ? preflights[0] : { ok: preflights.every((p) => p.ok), results: preflights })
+      : null;
     if (preflight) tools = undefined;
+    const preflightText = preflights.map((r, i) => `[工具${i + 1} 真实输出]\n${JSON.stringify(r).slice(0, 2500)}`).join('\n\n');
     const messages = preflight ? [
-      { role: 'system', content: '你是严谨的科研协作 agent。下面是分析工具的真实运行结果，必须只依据它作答并引用其中具体数字；不得编造，工具失败时如实说明。' },
-      { role: 'user', content: `病例：${String(job.text || '').slice(0, 800)}\n\n[工具真实输出]\n${JSON.stringify(preflight).slice(0, 3500)}\n\n请基于工具结果给 3–6 条结论：A 载药是否可行、B 封堵建议、材料短名单、数据缺口。` },
+      { role: 'system', content: '你是严谨的科研协作 agent。下面是分析工具的真实运行结果，必须只依据它们作答并引用其中具体数字；不得编造，工具失败时如实说明。' },
+      { role: 'user', content: `病例：${String(job.text || '').slice(0, 800)}\n\n${preflightText}\n\n请用不超过 6 条要点回答：A/B 概念结论；密封力（静压载荷用 mN，所需密封力用 N）；材料短名单；材料物理指标表（聚合物 / t_crit 天 / 90 天质量损失 / 90 天孔径漂移 / 释放指数 n / 判定）；数据缺口。单位必须写清：径向力用 N，力裕度无量纲，载荷用 mN。不要复述工具 JSON 原文。` },
     ] : [
       { role: 'system', content: '你是一个严谨的科研协作 agent，成果供人类研究者审阅。涉及数值计算时须调用可用的分析工具，以其真实输出为依据。工具失败要明确说明，禁止编造计算结果。' },
       { role: 'user', content: buildPrompt(job) },
@@ -287,6 +317,7 @@ registerAdapter({
         body: JSON.stringify({
           model,
           messages, ...(tools ? { tools, parallel_tool_calls: false } : {}),
+          max_tokens: options.maxTokens ?? 700,
           temperature: options.temperature ?? 0.3,
         }),
         signal: ctrl.signal,
@@ -344,7 +375,7 @@ registerAdapter({
   async exec(job, options = {}) {
     if (!options.url) return { ok: false, text: 'webhook 后端缺少 url 配置' };
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), options.timeoutMs || 120_000);
+    const timer = setTimeout(() => ctrl.abort(), options.timeoutMs || 240_000);
     try {
       const r = await fetch(options.url, {
         method: 'POST',
@@ -367,4 +398,5 @@ registerAdapter({
     }
   },
 });
+
 

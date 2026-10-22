@@ -1650,6 +1650,144 @@ def cmd_concept(args):
 
 
 # --------------------------------------------------------------------------
+# 命令：fdo —— FDO 数据集聚合物降解/材料物理指标筛选
+# --------------------------------------------------------------------------
+
+# 常数来自 FDO dataset 2026-10-21 的 src/degradation.py：
+# 文献量级占位（不是拟合值），演示时必须标注“screening, not measured”。
+FDO_POLYMERS = [
+    # name, mw0_kDa, k_per_day, alpha, mw_crit_kDa, mode, release_n, burst, swell_percent
+    ("PLGA 50:50", 60.0, 0.012, 1.5, 10.0, "bulk", 0.45, 0.12, 8.0),
+    ("PLGA 85:15", 70.0, 0.0040, 1.5, 10.0, "bulk", 0.45, 0.10, 5.0),
+    ("PCL", 80.0, 0.0007, 0.0, 10.0, "bulk", 0.45, 0.05, 2.0),
+    ("poly(ortho ester)", 50.0, 0.0060, 0.0, 10.0, "surface", 0.95, 0.03, 1.0),
+    ("polyanhydride", 45.0, 0.0150, 0.0, 10.0, "surface", 1.00, 0.02, 0.0),
+]
+FDO_SOURCE = "FDO dataset 2026-10-21 · src/degradation.py（literature-order placeholders, not fitted）"
+
+
+def _fdo_mw_fraction(t_days, k, alpha):
+    a = 1.0 + alpha
+    e = math.exp(-k * a * t_days)
+    return a * e / (1.0 + alpha * e)
+
+
+def _fdo_time_to_mw_fraction(x_target, k, alpha):
+    if x_target <= 0:
+        return float("inf")
+    if x_target >= 1:
+        return 0.0
+    a = 1.0 + alpha
+    denom = a - alpha * x_target
+    if denom <= 0:
+        return float("inf")
+    return math.log(denom / x_target) / (k * a)
+
+
+def _fdo_mass_loss(t_days, polymer):
+    _, mw0, k, alpha, mw_crit, mode, _, _, _ = polymer
+    if mode == "surface":
+        return min(1.0, k * t_days)
+    t_crit = _fdo_time_to_mw_fraction(mw_crit / mw0, k, alpha)
+    if not math.isfinite(t_crit) or t_days <= t_crit:
+        return 0.0
+    tau = max(1.0, 0.15 * t_crit)
+    return 1.0 - math.exp(-(t_days - t_crit) / tau)
+
+
+def _fdo_radius_drift(r0_mm, mass_loss, swell_percent, outer_ratio=1.5):
+    r_out = outer_ratio * r0_mm
+    r = math.sqrt(max(0.0, r_out ** 2 - (1.0 - mass_loss) * (r_out ** 2 - r0_mm ** 2)))
+    r *= (1.0 - swell_percent / 100.0)
+    return (r - r0_mm) / r0_mm
+
+
+def _fdo_screen(polymer, release_days, horizon_days, r0_mm, tolerance):
+    name, mw0, k, alpha, mw_crit, mode, n, burst, swell = polymer
+    t_crit = (1.0 / k if mode == "surface"
+              else _fdo_time_to_mw_fraction(mw_crit / mw0, k, alpha))
+    ml_rel = _fdo_mass_loss(release_days, polymer)
+    ml_h = _fdo_mass_loss(horizon_days, polymer)
+    dr_rel = _fdo_radius_drift(r0_mm, ml_rel, swell)
+    dr_h = _fdo_radius_drift(r0_mm, ml_h, swell)
+    return {
+        "polymer": name,
+        "mode": mode,
+        "t_crit_days": t_crit,
+        "mass_loss_at_release_end": ml_rel,
+        "mass_loss_at_horizon": ml_h,
+        "radius_drift_at_release_end": dr_rel,
+        "radius_drift_at_horizon": dr_h,
+        "release_order_n": n,
+        "burst_fraction": burst,
+        "meets_orifice_tolerance": abs(dr_h) <= tolerance,
+        "meets_zero_order": n >= 0.85,
+    }
+
+
+def cmd_fdo(args):
+    release_days = args.release_days
+    horizon_days = args.horizon_days
+    orifice_mm = args.orifice_mm
+    tolerance = args.tolerance
+    r0_mm = orifice_mm / 2.0
+    rows = [_fdo_screen(p, release_days, horizon_days, r0_mm, tolerance) for p in FDO_POLYMERS]
+    both = [r["polymer"] for r in rows if r["meets_orifice_tolerance"] and r["meets_zero_order"]]
+    neither = [r["polymer"] for r in rows if not r["meets_orifice_tolerance"] and not r["meets_zero_order"]]
+    limitations = [
+        "动力学常数是文献量级占位（不是拟合值）：只用于 screening，不能当实测寿命。",
+        "模型只含水解/质量损失/孔径漂移/释放指数，不含 pH、血栓、疲劳、灭菌影响。",
+        "孔口漂移按“平板内孔 + 1.5 倍外径”几何近似；真实器件需台架/动物验证。",
+        "输出是材料短名单与物理指标，不构成器械尺寸或临床决策。",
+    ]
+
+    if args.json:
+        print(json.dumps({
+            "command": "fdo",
+            "params": {"release_days": release_days, "horizon_days": horizon_days,
+                       "orifice_mm": orifice_mm, "tolerance": tolerance},
+            "polymers": rows,
+            "summary": {"meets_both": both, "fails_both": neither,
+                        "conclusion": ("无单一聚合物同时满足孔口容差与零级释放" if not both
+                                       else "满足双约束的候选：" + "、".join(both))},
+            "source": FDO_SOURCE,
+            "limitations": limitations,
+        }, ensure_ascii=False, indent=2))
+        return 0
+
+    print("FDO 材料物理指标筛选（screening, not measured）")
+    print("需求：释放窗口 {} 天；服役期 {} 天；孔口直径 {} mm（容差 ±{:.0%}）".format(
+        _num(release_days), _num(horizon_days), _num(orifice_mm), tolerance))
+    print("数据源：{}".format(FDO_SOURCE))
+    print("")
+    table = []
+    for r in rows:
+        table.append([
+            r["polymer"], r["mode"], _num(r["t_crit_days"], sig=4),
+            _num(r["mass_loss_at_release_end"], sig=3), _num(r["mass_loss_at_horizon"], sig=3),
+            "{:+.1%}".format(r["radius_drift_at_release_end"]),
+            "{:+.1%}".format(r["radius_drift_at_horizon"]),
+            _num(r["release_order_n"], sig=2),
+            ("孔口OK" if r["meets_orifice_tolerance"] else "孔口FAILS") + "/" +
+            ("零级" if r["meets_zero_order"] else "一级"),
+        ])
+    _print_table(["polymer", "mode", "t_crit(d)", "ml@rel", "ml@horizon",
+                  "dr@rel", "dr@horizon", "n", "verdict"], table,
+                 aligns=["l", "l", "r", "r", "r", "r", "r", "r", "l"])
+    print("")
+    if both:
+        print("双约束都满足：{}".format("、".join(both)))
+    else:
+        print("结论：无单一聚合物同时满足「孔口 ±{:.0%}」与「零级释放 n≥0.85」——需求单本身过约束。".format(tolerance))
+        print("可行方向：拆功能（不降解孔口 + 独立降解药库）/ 放宽零级要求 / 缩短服役期。")
+    print("")
+    print("[限制]")
+    for item in limitations:
+        print("  - {}".format(item))
+    return 0
+
+
+# --------------------------------------------------------------------------
 # argparse 入口
 # --------------------------------------------------------------------------
 
@@ -1750,6 +1888,21 @@ def build_parser():
                        help="密封安全系数（默认 2）")
     p_con.add_argument("--json", action="store_true", help="只输出一个 JSON 对象")
     p_con.set_defaults(func=cmd_concept)
+
+    p_fdo = subparsers.add_parser(
+        "fdo",
+        help="FDO 材料物理指标筛选：t_crit / 质量损失 / 孔径漂移 / 释放指数（文献量级占位）",
+    )
+    p_fdo.add_argument("--release-days", type=_positive_float, default=7.0, metavar="天",
+                       help="释放窗口（默认 7 天）")
+    p_fdo.add_argument("--horizon-days", type=_positive_float, default=90.0, metavar="天",
+                       help="服役期（默认 90 天）")
+    p_fdo.add_argument("--orifice-mm", type=_positive_float, default=0.71, metavar="mm",
+                       help="孔口直径（默认 0.71 mm，来自 FDO 设计扫描）")
+    p_fdo.add_argument("--tolerance", type=_positive_float, default=0.10,
+                       help="孔口半径容差（默认 0.10 = ±10%）")
+    p_fdo.add_argument("--json", action="store_true", help="只输出一个 JSON 对象")
+    p_fdo.set_defaults(func=cmd_fdo)
 
     p_ver = subparsers.add_parser("verify", help="纯 Python 三对角求解的数值实现自检")
     p_ver.add_argument("--n", nargs="+", default=None,

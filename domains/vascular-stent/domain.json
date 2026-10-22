@@ -1,357 +1,395 @@
 {
-    "name":  "vascular-stent",
-    "version":  "1.0.0",
-    "description":  "可吸收血管介入器件域包：Mg/Zn/Fe 金属与 PLLA/PLGA/PCL/PDO 聚合物材料库、支架刚度/径向力、脉动血流 WSS、V0–V5 验证口径，以及面向病例输入的介入概念筛选（药物涂层支架 vs 封堵/栓塞器件）",
-    "searchAliases":  {
-                          "径向力":  [
-                                      "radial force",
-                                      "径向支撑力",
-                                      "radial stiffness"
-                                  ],
-                          "支撑力":  [
-                                      "radial force",
-                                      "支撑力衰减"
-                                  ],
-                          "回弹":  [
-                                     "recoil",
-                                     "回弹率"
-                                 ],
-                          "短缩":  [
-                                     "foreshortening",
-                                     "短缩率"
-                                 ],
-                          "狗骨":  [
-                                     "dog-boning",
-                                     "dog boning",
-                                     "狗骨形"
-                                 ],
-                          "壁面剪切":  [
-                                       "wss",
-                                       "tawss",
-                                       "壁面剪切应力"
-                                   ],
-                          "剪切":  [
-                                     "wss",
-                                     "tawss",
-                                     "剪切"
-                                 ],
-                          "振荡剪切":  [
-                                       "osi",
-                                       "振荡剪切指数"
-                                   ],
-                          "滞留时间":  [
-                                       "rrt",
-                                       "相对停留时间"
-                                   ],
-                          "降解":  [
-                                     "degradation",
-                                     "腐蚀",
-                                     "水解",
-                                     "吸收"
-                                 ],
-                          "腐蚀":  [
-                                     "corrosion",
-                                     "腐蚀速率"
-                                 ],
-                          "水解":  [
-                                     "hydrolysis",
-                                     "分子量"
-                                 ],
-                          "可吸收":  [
-                                      "absorbable",
-                                      "bioresorbable",
-                                      "生物可吸收"
-                                  ],
-                          "支杆":  [
-                                     "strut",
-                                     "支杆厚度"
-                                 ],
-                          "压握":  [
-                                     "crimping",
-                                     "压握直径"
-                                 ],
-                          "扩张":  [
-                                     "expansion",
-                                     "球囊扩张"
-                                 ],
-                          "流固耦合":  [
-                                       "fsi",
-                                       "fluid-structure"
-                                   ],
-                          "有限元":  [
-                                      "fea",
-                                      "finite element",
-                                      "有限元"
-                                  ],
-                          "网格":  [
-                                     "mesh",
-                                     "网格收敛",
-                                     "网格验证"
-                                 ],
-                          "镁":  [
-                                    "mg",
-                                    "magnesium",
-                                    "we43",
-                                    "az31",
-                                    "zk60"
-                                ],
-                          "锌":  [
-                                    "zn",
-                                    "zinc"
-                                ],
-                          "铁":  [
-                                    "fe",
-                                    "iron"
-                                ],
-                          "聚合物":  [
-                                      "polymer",
-                                      "plla",
-                                      "plga",
-                                      "pcl",
-                                      "pdo"
-                                  ],
-                          "环向应力":  [
-                                       "hoop stress",
-                                       "环向"
-                                   ],
-                          "泊肃叶":  [
-                                      "poiseuille",
-                                      "圆管"
-                                  ],
-                          "疲劳":  [
-                                     "fatigue",
-                                     "疲劳寿命"
-                                 ],
-                          "溶血":  [
-                                     "hemolysis",
-                                     "血液相容性"
-                                 ],
-                          "材料":  [
-                                     "material",
-                                     "matweb",
-                                     "选材"
-                                 ],
-                          "验证":  [
-                                     "validation",
-                                     "verification",
-                                     "基准"
-                                 ],
-                          "病例":  [
-                                     "case",
-                                     "patient",
-                                     "个体化"
-                                 ],
-                          "化疗栓塞":  [
-                                       "tace",
-                                       "deb",
-                                       "chemoembolization"
-                                   ],
-                          "供血动脉":  [
-                                       "feeding artery",
-                                       "供血"
-                                   ],
-                          "肿瘤":  [
-                                     "tumor",
-                                     "tumour",
-                                     "肿瘤供血"
-                                 ],
-                          "载药":  [
-                                     "drug loading",
-                                     "coating",
-                                     "涂层"
-                                 ],
-                          "封堵":  [
-                                     "plug",
-                                     "occluder",
-                                     "封堵器",
-                                     "vascular plug"
-                                 ],
-                          "药物":  [
-                                     "drug",
-                                     "eluting",
-                                     "drug-eluting",
-                                     "载药"
-                                 ],
-                          "覆膜":  [
-                                     "covered stent",
-                                     "stent-graft",
-                                     "覆膜支架"
-                                 ],
-                          "栓塞":  [
-                                     "embolization",
-                                     "occlusion",
-                                     "栓塞"
-                                 ],
-                          "造影":  [
-                                     "angiography",
-                                     "造影"
-                                 ]
-                      },
-    "data":  {
-                 "materials":  "data/MatWeb材料汇总_2026-10-18.csv",
-                 "properties":  "data/MatWeb属性明细_2026-10-18.csv",
-                 "tool":  "scripts/stent_tool.py",
-                 "source_doc":  "docs/模型原文提取.md",
-                 "material_count":  9,
-                 "property_count":  65
-             },
-    "analysis":  {
-                     "script":  "scripts/stent_tool.py",
-                     "data":  [
-                                  "data/MatWeb材料汇总_2026-10-18.csv",
-                                  "data/MatWeb属性明细_2026-10-18.csv"
-                              ],
-                     "tool":  {
-                                  "name":  "run_stent_tool",
-                                  "description":  "运行血管介入器件域包工具（零依赖）：材料对比、薄环刚度、泊肃叶基准、数值自检，以及面向病例输入的概念筛选（载药 vs 封堵）。结果以 JSON 返回。"
-                              },
-                     "commands":  [
-                                      {
-                                          "name":  "materials",
-                                          "label":  "材料对比",
-                                          "description":  "读 MatWeb 材料库，按族/可吸收/最小抗拉过滤并输出对比表",
-                                          "args":  [
-                                                       "materials",
-                                                       "--json"
-                                                   ],
-                                          "params":  {
-                                                         "family":  {
-                                                                        "type":  "string",
-                                                                        "enum":  [
-                                                                                     "Mg",
-                                                                                     "Zn",
-                                                                                     "Fe",
-                                                                                     "polymer"
-                                                                                 ],
-                                                                        "label":  "材料族",
-                                                                        "description":  "只保留指定材料族",
-                                                                        "flag":  "--family"
-                                                                    },
-                                                         "degradable":  {
-                                                                            "type":  "boolean",
-                                                                            "label":  "只看可吸收",
-                                                                            "description":  "只保留数据集中有完全质量损失时间的材料（仅 4 种聚合物）",
-                                                                            "flag":  "--degradable"
-                                                                        }
-                                                     }
-                                      },
-                                      {
-                                          "name":  "ring",
-                                          "label":  "薄环刚度",
-                                          "description":  "连续薄环尺度 k_line = E·t³/(12R³) 与 ΔR 对应径向力（数量级检查，不是成品径向力）",
-                                          "args":  [
-                                                       "ring",
-                                                       "--json"
-                                                   ],
-                                          "params":  {
-                                                         "E":  {
-                                                                   "type":  "number",
-                                                                   "required":  true,
-                                                                   "positive":  true,
-                                                                   "label":  "弹性模量（GPa）",
-                                                                   "description":  "材料弹性模量，区间材料请说明取中点还是端点",
-                                                                   "flag":  "--E"
-                                                               },
-                                                         "t":  {
-                                                                   "type":  "number",
-                                                                   "required":  true,
-                                                                   "positive":  true,
-                                                                   "label":  "环壁厚（μm）",
-                                                                   "description":  "支杆/环壁厚度（μm）",
-                                                                   "flag":  "--t"
-                                                               },
-                                                         "R":  {
-                                                                   "type":  "number",
-                                                                   "positive":  true,
-                                                                   "label":  "环半径（mm）",
-                                                                   "description":  "默认 1.5 mm",
-                                                                   "flag":  "--R"
-                                                               }
-                                                     }
-                                      },
-                                      {
-                                          "name":  "flow",
-                                          "label":  "泊肃叶基准",
-                                          "description":  "圆管稳态牛顿流：平均流速、Re、压降、WSS、中心线流速",
-                                          "args":  [
-                                                       "flow",
-                                                       "--json"
-                                                   ],
-                                          "params":  {
-                                                         "q":  {
-                                                                   "type":  "number",
-                                                                   "positive":  true,
-                                                                   "label":  "流量（mL/min）",
-                                                                   "description":  "冠脉流量窗口 20–200 mL/min；默认 100",
-                                                                   "flag":  "--q"
-                                                               }
-                                                     }
-                                      },
-                                      {
-                                          "name":  "concept",
-                                          "label":  "概念筛选（载药 vs 封堵）",
-                                          "description":  "按病例输入比较药物涂层支架与封堵/栓塞器件：载药预算、密封力需求、材料短名单与降解窗",
-                                          "args":  [
-                                                       "concept",
-                                                       "--json",
-                                                       "--lesion-mm",
-                                                       "{lesion_mm}"
-                                                   ],
-                                          "params":  {
-                                                         "lesion_mm":  {
-                                                                           "type":  "number",
-                                                                           "required":  true,
-                                                                           "positive":  true,
-                                                                           "label":  "病变/缺损直径（mm）",
-                                                                           "description":  "B1 破口直径 / B2 目标血管直径"
-                                                                       },
-                                                         "vessel_mm":  {
-                                                                           "type":  "number",
-                                                                           "positive":  true,
-                                                                           "label":  "目标血管直径（mm）",
-                                                                           "description":  "默认 3.0",
-                                                                           "flag":  "--vessel-mm"
-                                                                       },
-                                                         "length_mm":  {
-                                                                           "type":  "number",
-                                                                           "positive":  true,
-                                                                           "label":  "封堵段长度（mm）",
-                                                                           "description":  "默认 10",
-                                                                           "flag":  "--length-mm"
-                                                                       },
-                                                         "pressure_mmhg":  {
-                                                                               "type":  "number",
-                                                                               "positive":  true,
-                                                                               "label":  "血压（mmHg）",
-                                                                               "description":  "默认 100",
-                                                                               "flag":  "--pressure-mmhg"
-                                                                           },
-                                                         "location":  {
-                                                                          "type":  "string",
-                                                                          "label":  "肿瘤/病变位置",
-                                                                          "description":  "病例上下文，只回显",
-                                                                          "flag":  "--location"
-                                                                      }
-                                                     }
-                                      },
-                                      {
-                                          "name":  "verify",
-                                          "label":  "数值验证",
-                                          "description":  "V0 代码验证：圆管有限差分 + 轴对称厚壁管 FEM 网格收敛，18 项自检",
-                                          "args":  [
-                                                       "verify",
-                                                       "--json"
-                                                   ]
-                                      },
-                                      {
-                                          "name":  "all",
-                                          "label":  "全部基准",
-                                          "description":  "flow(20–200) + verify + ring 一次跑完，输出可写入 provenance 的 JSON",
-                                          "args":  [
-                                                       "all",
-                                                       "--json"
-                                                   ]
-                                      }
-                                  ]
-                 }
+  "name": "vascular-stent",
+  "version": "1.0.0",
+  "description": "可吸收血管介入器件域包：Mg/Zn/Fe 金属与 PLLA/PLGA/PCL/PDO 聚合物材料库、支架刚度/径向力、脉动血流 WSS、V0–V5 验证口径，以及面向病例输入的介入概念筛选（药物涂层支架 vs 封堵/栓塞器件）",
+  "searchAliases": {
+    "径向力": [
+      "radial force",
+      "径向支撑力",
+      "radial stiffness"
+    ],
+    "支撑力": [
+      "radial force",
+      "支撑力衰减"
+    ],
+    "回弹": [
+      "recoil",
+      "回弹率"
+    ],
+    "短缩": [
+      "foreshortening",
+      "短缩率"
+    ],
+    "狗骨": [
+      "dog-boning",
+      "dog boning",
+      "狗骨形"
+    ],
+    "壁面剪切": [
+      "wss",
+      "tawss",
+      "壁面剪切应力"
+    ],
+    "剪切": [
+      "wss",
+      "tawss",
+      "剪切"
+    ],
+    "振荡剪切": [
+      "osi",
+      "振荡剪切指数"
+    ],
+    "滞留时间": [
+      "rrt",
+      "相对停留时间"
+    ],
+    "降解": [
+      "degradation",
+      "腐蚀",
+      "水解",
+      "吸收"
+    ],
+    "腐蚀": [
+      "corrosion",
+      "腐蚀速率"
+    ],
+    "水解": [
+      "hydrolysis",
+      "分子量"
+    ],
+    "可吸收": [
+      "absorbable",
+      "bioresorbable",
+      "生物可吸收"
+    ],
+    "支杆": [
+      "strut",
+      "支杆厚度"
+    ],
+    "压握": [
+      "crimping",
+      "压握直径"
+    ],
+    "扩张": [
+      "expansion",
+      "球囊扩张"
+    ],
+    "流固耦合": [
+      "fsi",
+      "fluid-structure"
+    ],
+    "有限元": [
+      "fea",
+      "finite element",
+      "有限元"
+    ],
+    "网格": [
+      "mesh",
+      "网格收敛",
+      "网格验证"
+    ],
+    "镁": [
+      "mg",
+      "magnesium",
+      "we43",
+      "az31",
+      "zk60"
+    ],
+    "锌": [
+      "zn",
+      "zinc"
+    ],
+    "铁": [
+      "fe",
+      "iron"
+    ],
+    "聚合物": [
+      "polymer",
+      "plla",
+      "plga",
+      "pcl",
+      "pdo"
+    ],
+    "环向应力": [
+      "hoop stress",
+      "环向"
+    ],
+    "泊肃叶": [
+      "poiseuille",
+      "圆管"
+    ],
+    "疲劳": [
+      "fatigue",
+      "疲劳寿命"
+    ],
+    "溶血": [
+      "hemolysis",
+      "血液相容性"
+    ],
+    "材料": [
+      "material",
+      "matweb",
+      "选材"
+    ],
+    "验证": [
+      "validation",
+      "verification",
+      "基准"
+    ],
+    "病例": [
+      "case",
+      "patient",
+      "个体化"
+    ],
+    "化疗栓塞": [
+      "tace",
+      "deb",
+      "chemoembolization"
+    ],
+    "供血动脉": [
+      "feeding artery",
+      "供血"
+    ],
+    "肿瘤": [
+      "tumor",
+      "tumour",
+      "肿瘤供血"
+    ],
+    "载药": [
+      "drug loading",
+      "coating",
+      "涂层"
+    ],
+    "封堵": [
+      "plug",
+      "occluder",
+      "封堵器",
+      "vascular plug"
+    ],
+    "药物": [
+      "drug",
+      "eluting",
+      "drug-eluting",
+      "载药"
+    ],
+    "覆膜": [
+      "covered stent",
+      "stent-graft",
+      "覆膜支架"
+    ],
+    "栓塞": [
+      "embolization",
+      "occlusion",
+      "栓塞"
+    ],
+    "造影": [
+      "angiography",
+      "造影"
+    ]
+  },
+  "data": {
+    "materials": "data/MatWeb材料汇总_2026-10-18.csv",
+    "properties": "data/MatWeb属性明细_2026-10-18.csv",
+    "tool": "scripts/stent_tool.py",
+    "source_doc": "docs/模型原文提取.md",
+    "material_count": 9,
+    "property_count": 65
+  },
+  "analysis": {
+    "script": "scripts/stent_tool.py",
+    "data": [
+      "data/MatWeb材料汇总_2026-10-18.csv",
+      "data/MatWeb属性明细_2026-10-18.csv"
+    ],
+    "tool": {
+      "name": "run_stent_tool",
+      "description": "运行血管介入器件域包工具（零依赖）：材料对比、薄环刚度、泊肃叶基准、概念筛选（载药 vs 封堵）、FDO 材料物理指标筛选、数值自检。结果以 JSON 返回。"
+    },
+    "commands": [
+      {
+        "name": "materials",
+        "label": "材料对比",
+        "description": "读 MatWeb 材料库，按族/可吸收/最小抗拉过滤并输出对比表",
+        "args": [
+          "materials",
+          "--json"
+        ],
+        "params": {
+          "family": {
+            "type": "string",
+            "enum": [
+              "Mg",
+              "Zn",
+              "Fe",
+              "polymer"
+            ],
+            "label": "材料族",
+            "description": "只保留指定材料族",
+            "flag": "--family"
+          },
+          "degradable": {
+            "type": "boolean",
+            "label": "只看可吸收",
+            "description": "只保留数据集中有完全质量损失时间的材料（仅 4 种聚合物）",
+            "flag": "--degradable"
+          }
+        }
+      },
+      {
+        "name": "ring",
+        "label": "薄环刚度",
+        "description": "连续薄环尺度 k_line = E·t³/(12R³) 与 ΔR 对应径向力（数量级检查，不是成品径向力）",
+        "args": [
+          "ring",
+          "--json"
+        ],
+        "params": {
+          "E": {
+            "type": "number",
+            "required": true,
+            "positive": true,
+            "label": "弹性模量（GPa）",
+            "description": "材料弹性模量，区间材料请说明取中点还是端点",
+            "flag": "--E"
+          },
+          "t": {
+            "type": "number",
+            "required": true,
+            "positive": true,
+            "label": "环壁厚（μm）",
+            "description": "支杆/环壁厚度（μm）",
+            "flag": "--t"
+          },
+          "R": {
+            "type": "number",
+            "positive": true,
+            "label": "环半径（mm）",
+            "description": "默认 1.5 mm",
+            "flag": "--R"
+          }
+        }
+      },
+      {
+        "name": "flow",
+        "label": "泊肃叶基准",
+        "description": "圆管稳态牛顿流：平均流速、Re、压降、WSS、中心线流速",
+        "args": [
+          "flow",
+          "--json"
+        ],
+        "params": {
+          "q": {
+            "type": "number",
+            "positive": true,
+            "label": "流量（mL/min）",
+            "description": "冠脉流量窗口 20–200 mL/min；默认 100",
+            "flag": "--q"
+          }
+        }
+      },
+      {
+        "name": "concept",
+        "label": "概念筛选（载药 vs 封堵）",
+        "description": "按病例输入比较药物涂层支架与封堵/栓塞器件：载药预算、密封力需求、材料短名单与降解窗",
+        "args": [
+          "concept",
+          "--json",
+          "--lesion-mm",
+          "{lesion_mm}"
+        ],
+        "params": {
+          "lesion_mm": {
+            "type": "number",
+            "required": true,
+            "positive": true,
+            "label": "病变/缺损直径（mm）",
+            "description": "B1 破口直径 / B2 目标血管直径"
+          },
+          "vessel_mm": {
+            "type": "number",
+            "positive": true,
+            "label": "目标血管直径（mm）",
+            "description": "默认 3.0",
+            "flag": "--vessel-mm"
+          },
+          "length_mm": {
+            "type": "number",
+            "positive": true,
+            "label": "封堵段长度（mm）",
+            "description": "默认 10",
+            "flag": "--length-mm"
+          },
+          "pressure_mmhg": {
+            "type": "number",
+            "positive": true,
+            "label": "血压（mmHg）",
+            "description": "默认 100",
+            "flag": "--pressure-mmhg"
+          },
+          "location": {
+            "type": "string",
+            "label": "肿瘤/病变位置",
+            "description": "病例上下文，只回显",
+            "flag": "--location"
+          }
+        }
+      },
+      {
+        "name": "fdo",
+        "label": "FDO 材料物理指标",
+        "description": "按释放窗口/服役期/孔口直径筛聚合物：t_crit、质量损失、孔径漂移、释放指数、双约束判定",
+        "args": [
+          "fdo",
+          "--json",
+          "--release-days",
+          "{release_days}",
+          "--horizon-days",
+          "{horizon_days}",
+          "--orifice-mm",
+          "{orifice_mm}"
+        ],
+        "params": {
+          "release_days": {
+            "type": "number",
+            "required": true,
+            "positive": true,
+            "label": "释放窗口（天）",
+            "description": "默认 7"
+          },
+          "horizon_days": {
+            "type": "number",
+            "required": true,
+            "positive": true,
+            "label": "服役期（天）",
+            "description": "默认 90"
+          },
+          "orifice_mm": {
+            "type": "number",
+            "required": true,
+            "positive": true,
+            "label": "孔口直径（mm）",
+            "description": "默认 0.71"
+          }
+        }
+      },
+      {
+        "name": "verify",
+        "label": "数值验证",
+        "description": "V0 代码验证：圆管有限差分 + 轴对称厚壁管 FEM 网格收敛，18 项自检",
+        "args": [
+          "verify",
+          "--json"
+        ]
+      },
+      {
+        "name": "all",
+        "label": "全部基准",
+        "description": "flow(20–200) + verify + ring 一次跑完，输出可写入 provenance 的 JSON",
+        "args": [
+          "all",
+          "--json"
+        ]
+      }
+    ]
+  }
 }

@@ -50,6 +50,7 @@ for (const [command, params, expected] of [
   ['ring', { E: 44.2, t: 120 }, /1885866/],
   ['flow', { q: 100 }, /483\.3/],
   ['concept', { lesion_mm: 4, vessel_mm: 3 }, /封堵/],
+  ['fdo', { release_days: 7, horizon_days: 90, orifice_mm: 0.71 }, /polyanhydride|PLGA/],
   ['verify', {}, /自检/],
   ['all', {}, /self_check_passed/],
 ]) {

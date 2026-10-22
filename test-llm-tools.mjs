@@ -28,12 +28,29 @@ test('forceToolCommand pre-executes the real tool once and feeds its JSON to the
     assert.equal(requests.length, 1, 'preflight replaces the model-initiated tool round');
     assert.equal(requests[0].body.tools, undefined);
     const prompt = requests[0].body.messages.map((m) => String(m.content || '')).join('\n');
-    assert.match(prompt, /\[工具真实输出\]/);
+    assert.match(prompt, /\[工具1 真实输出\]/);
     assert.match(prompt, /required_sealing_force_mn/);
     assert.equal(result.analysisRuns.length, 1);
     assert.equal(result.analysisRuns[0].provenance.command, 'concept');
     assert.equal(result.analysisRuns[0].provenance.domain, 'vascular-stent');
     assert.match(result.text, /335\.1/);
+  });
+});
+
+test('forceToolCommands pre-executes concept + fdo and feeds both JSONs in one call', async () => {
+  await withModel(() => ({ role: 'assistant', content: '结论：无单一聚合物同时满足孔口与零级。' }), async (options, requests) => {
+    const result = await getAdapter('llm').exec(caseJob, {
+      ...options, enableTools: true, forceToolCommands: ['concept', 'fdo'],
+    });
+    assert.equal(result.ok, true);
+    assert.equal(requests.length, 1);
+    assert.equal(requests[0].body.tools, undefined);
+    const prompt = requests[0].body.messages.map((m) => String(m.content || '')).join('\n');
+    assert.match(prompt, /required_sealing_force_mn/);
+    assert.match(prompt, /polyanhydride|PLGA/);
+    assert.match(prompt, /t_crit_days/);
+    assert.equal(result.analysisRuns.length, 2);
+    assert.deepEqual(result.analysisRuns.map((r) => r.provenance.command), ['concept', 'fdo']);
   });
 });
 

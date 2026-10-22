@@ -7,11 +7,12 @@ SciTag 的第二个域包：把「可吸收血管支架物理模型与计算验�
 ```
 vascular-stent/
 ├── domain.json                         # 域清单：name/description/searchAliases/data/analysis
-├── kb/                                 # 知识库：文件名即条目名，7 条
+├── kb/                                 # 知识库：文件名即条目名，8 条
 │   ├── 模型迁移边界与基线参数.md
 │   ├── 器械性能与血流指标.md
 │   ├── 材料数据字典.md
 │   ├── 计算验证与验收口径.md
+│   ├── FDO材料筛选口径.md                # 聚合物 t_crit/质量损失/孔口漂移/释放指数
 │   ├── 药物涂层支架剂量边界.md          # 涂层载药量 vs 口服日剂量（概念 A 的否决依据）
 │   ├── 封堵覆膜器件与病例输入.md        # 覆膜支架/封堵器 + 医生输入口径（概念 B）
 │   └── 术语表.md
@@ -23,7 +24,7 @@ vascular-stent/
 │   ├── MatWeb材料汇总_2026-10-18.csv    # 9 个材料 × 18 列
 │   └── MatWeb属性明细_2026-10-18.csv    # 65 条属性（单值/区间/下限）
 ├── scripts/
-│   ├── stent_tool.py                   # 零依赖 CLI：materials/ring/flow/concept/verify/all
+│   ├── stent_tool.py                   # 零依赖 CLI：materials/ring/flow/concept/fdo/verify/all
 │   └── original_vascular_stent_validation.py  # 用户原始脚本（numpy+PIL，留档复现用）
 └── docs/
     └── 模型原文提取.md                  # docx 全文提取（表格/公式/参考文献）
@@ -88,3 +89,4 @@ python3 domains/vascular-stent/scripts/stent_tool.py all --json
 - 平台测试：`node --test test-vascular-stent.mjs`（工具注册/analysis 后端/参数校验），
   `node --test test-research.mjs`（真实执行与 provenance），`npm test`（全量）。
 - 工具数值与原脚本 numpy 实跑的逐项对照见 `stent-domain/_work/tool-check/compare.md`（工作区留档，不入库）。`getAdapter('analysis')` 也可直接调用：`exec(job, {domain:'vascular-stent', command:'verify'})`。
+

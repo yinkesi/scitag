@@ -75,7 +75,8 @@ node register_stent_agent.mjs http://127.0.0.1:8790 demo-wangyan
 
 输出 `registered 支架适配模型` 即成功；token 存在 `D:\code\_adaption\scitag-agent.json`。
 该 agent 的配置：`domains=['vascular-stent']`，adapter `llm` →
-`{baseUrl:'http://127.0.0.1:8780/v1', model:'scitag-stent-adapted', enableTools:true, forceToolCommand:'concept'}`。
+`{baseUrl:'http://127.0.0.1:8780/v1', model:'scitag-stent-adapted', enableTools:true, forceToolCommands:['concept','fdo'], maxTokens:1024, timeoutMs:420000}`。
+`concept` 出概念/密封力，`fdo` 出材料物理指标（t_crit / 质量损失 / 孔径漂移 / 释放指数）。
 
 ---
 
@@ -86,14 +87,15 @@ node register_stent_agent.mjs http://127.0.0.1:8790 demo-wangyan
 进入「骨支架课题组」，发送：
 
 ```
-@支架适配模型 病例：肝动脉右支供血，病变/缺损直径 4.0 mm，目标血管 3.0 mm，病变长度 10 mm，血压 100 mmHg，术式意向：断流栓塞。请做概念筛选（A 载药 vs B 封堵）并给材料短名单与数据缺口。
+@支架适配模型 病例：肝动脉右支供血，病变/缺损直径 4.0 mm，目标血管 3.0 mm，病变长度 10 mm，血压 100 mmHg，术式意向：断流栓塞；设计扫描给出释放 7 天、服役 90 天、孔口 0.71 mm。请做概念筛选，并输出材料物理指标。
 ```
 
-约 20–40 秒后收到回复。重点看三点：
+约 60–120 秒后收到回复。重点看四点：
 
 1. **A 载药**：约 270 µg、1.39×10⁻⁵ 口服剂量 → 不成立；
 2. **B 封堵**：静压载荷 167 mN → 密封力 **0.335 N**（安全系数 2）；
-3. **材料短名单**：Fe / Zn / Mg 通过永久闭塞的 1.5× 力裕度筛选。
+3. **材料短名单**：Fe / Zn / Mg 通过永久闭塞的 1.5× 力裕度筛选；
+4. **FDO 材料物理指标**：每种聚合物的 `t_crit`、90 天质量损失、90 天孔径漂移、释放指数 n、孔口/零级判定（常数是文献量级占位，口径必须说“screening, not measured”）。
 
 **方式 B：命令行一键跑**
 

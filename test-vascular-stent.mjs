@@ -62,6 +62,19 @@ test('analysis adapter runs the concept screen for a patient case', async () => 
   assert.equal(result.analysisRuns.length, 1);
 });
 
+test('analysis adapter runs the FDO material screen with per-polymer physical indicators', async () => {
+  const result = await getAdapter('analysis').exec(job, {
+    domain: 'vascular-stent', command: 'fdo',
+    params: { release_days: 7, horizon_days: 90, orifice_mm: 0.71 },
+  });
+  assert.equal(result.ok, true);
+  assert.match(result.text, /polyanhydride|PLGA/);
+  assert.match(result.text, /t_crit|质量损失|孔径漂移/);
+  assert.equal(result.provenance.command, 'fdo');
+  assert.equal(result.provenance.params.orifice_mm, 0.71);
+  assert.equal(result.analysisRuns.length, 1);
+});
+
 test('analysis adapter rejects a domain the agent has not mounted', async () => {
   const result = await getAdapter('analysis').exec({ ...job, domains: ['bone-scaffold'] }, {
     domain: 'vascular-stent', command: 'flow', params: { q: 100 },
@@ -80,7 +93,7 @@ test('llm backend exposes one tool per mounted analysis domain and runs it', asy
     assert.ok(Array.isArray(tools) && tools.length === 1, 'one mounted domain → one tool');
     const tool = tools[0].function;
     assert.equal(tool.name, 'run_stent_tool');
-    assert.deepEqual(tool.parameters.properties.command.enum, ['materials', 'ring', 'flow', 'concept', 'verify', 'all']);
+    assert.deepEqual(tool.parameters.properties.command.enum, ['materials', 'ring', 'flow', 'concept', 'fdo', 'verify', 'all']);
     assert.equal(tool.parameters.properties.E.type, 'number');
     assert.equal(tool.parameters.properties.family.enum.join(','), 'Mg,Zn,Fe,polymer');
     const response = requests[1].messages.find((m) => m.role === 'tool');
