@@ -1,7 +1,9 @@
 # Auditable concept screening for bioresorbable vascular devices
 ### A domain-tuned 4B model inside SciTag's human-gated multi-agent harness — Adaption sponsor track
 
-**TL;DR** — We turned a 1,392-row clinical-engineering dataset into a resident 4B domain model via Adaption's Adaptive Data + AutoScientist, then plugged it into SciTag as an OpenAI-compatible agent that calls a real analysis tool before answering. Same data, stronger LoRA: the platform's held-out preference win rate went from **51.67% → 90.67%**. Every answer carries tool provenance (domain, command, exit code, SHA-256 data hashes), so a human owner can audit the number, not just the prose.
+**TL;DR** — We turned a 1,392-row clinical-engineering dataset into a resident 4B domain model via Adaption's Adaptive Data + AutoScientist, then plugged it into SciTag as an OpenAI-compatible agent that calls real analysis tools before answering. Same data, stronger LoRA: the platform's held-out preference win rate went from **51.67% → 90.67%**. Every answer carries tool provenance (domain, command, exit code, SHA-256 data hashes), so a human owner can audit the number, not just the prose.
+
+**Innovation.** (1) Tool-grounded, auditable answers — the harness pre-executes the domain tools and records provenance, blocking fabricated numbers. (2) A quantified adaptation ablation — same data, 51.67% → 90.67%, plus a documented negative result for reasoning-trace data. (3) An end-to-end Adaption → local-agent path: merged LoRA, 4-bit, 3.2 GB VRAM, mounted inside a human-gated harness. (4) One case yields both concept feasibility and FDO material indicators (t_crit, mass loss, orifice drift, release order), with explicit screening guardrails.
 
 ---
 
@@ -15,7 +17,7 @@ Two hard constraints: (1) numbers must come from physics/tooling, not language-m
 
 **SciTag** (zero-dependency Node ≥18) is a research-collaboration harness: a PI dispatches work, agents mount domain packages (knowledge base, skills, data, declared analysis tools), report to their human owner for approval, and only then publish. The platform records tool runs and provenance for every agent answer.
 
-**Domain package `vascular-stent`** exposes a zero-dependency Python tool (`stent_tool.py`) declared in `domain.json`: material comparison, thin-ring stiffness, Poiseuille baseline, numerical self-checks, and a **`concept`** command that computes: drug-payload budget vs oral dose, static pressure load and required sealing force for a defect, and material shortlists with degradation-class screening.
+**Domain package `vascular-stent`** exposes a zero-dependency Python tool (`stent_tool.py`) declared in `domain.json`: material comparison, thin-ring stiffness, Poiseuille baseline, numerical self-checks, a **`concept`** command (drug-payload budget vs oral dose, static pressure load, required sealing force, material shortlists with degradation-class screening), and an **`fdo`** command that screens polymer families for a release window / service horizon / orifice size (`t_crit`, mass loss, orifice drift, release order n).
 
 **Adaption pipeline** — `1,392` instruction rows (materials facts, drug budgets, seal loads, case→concept, tool usage, refusal/red-line cases) → Adaptive Data → AutoScientist (Qwen3.5-4B, LoRA). A held-out 144-row split is never trained on.
 
@@ -32,12 +34,13 @@ Local held-out check (12 prompts, greedy, 4-bit): numeric recall 27.8% → **33.
 ## 4. Deployment & auditable demo
 
 - LoRA merged into base weights (manual key remap; PEFT injection silently failed under transformers 5.8), served as an **OpenAI-compatible** endpoint (`/v1/chat/completions`), 4-bit NF4, ~3.2 GB VRAM, ~5 tokens/s on an RTX 5060 Laptop.
-- SciTag agent `支架适配模型` mounts `vascular-stent` and uses a **forced pre-flight tool call**: the case parameters are parsed, `concept` is executed, and the real JSON is placed in a lean context before generation (also avoids 8 GB VRAM OOM on long contexts).
+- SciTag agent `支架适配模型` mounts `vascular-stent` and uses **forced pre-flight tool calls**: the case parameters are parsed, `concept` and `fdo` are executed, and the real JSON is placed in a lean context before generation (also avoids 8 GB VRAM OOM on long contexts).
 - Example case (hepatic artery, 4.0 mm lesion, 3.0 mm vessel, 100 mmHg, permanent embolization):
 
   > A (drug-eluting) **not viable**: local payload ~270 µg ≈ 1.39×10⁻⁵ of a 20 mg/day oral dose — 3+ orders of magnitude short.
   > B (occlusion) **viable**: static load 167 mN → required sealing force **0.335 N** at safety factor 2. Fe / Zn / Mg frames pass the 1.5× margin screen for permanent occlusion.
-  > Audit record: `domain=vascular-stent`, `command=concept`, `exitCode=0`, `analysisRuns=1`, data/script SHA-256 in provenance.
+  > Material indicators (FDO): PLGA 50:50 t_crit 86.8 d / 90-day mass loss 0.22 / orifice drift +3.9% / n 0.45; polyanhydride t_crit 66.7 d / drift +50% / n 1.00 — no single polymer satisfies both orifice tolerance and zero-order release.
+  > Audit record: `domain=vascular-stent`, `commands=concept,fdo`, `exitCode=0`, `analysisRuns=2`, data/script SHA-256 in provenance.
 
 ## 5. Reproducibility
 
